@@ -735,11 +735,11 @@ version = "0.1.0"
 dependencies = [
  "deno_core",
  "dirs 5.0.1",
+ "just-wef",
  "serde",
  "serde_json",
  "sysinfo",
  "tokio",
- "wef",
 ]
 
 [[package]]
@@ -1550,8 +1550,8 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 name = "hello_runtime"
 version = "0.1.0"
 dependencies = [
+ "just-wef",
  "tokio",
- "wef",
 ]
 
 [[package]]
@@ -1821,6 +1821,14 @@ checksum = "8c942ebf8e95485ca0d52d97da7c5a2c387d0e7f0ba4c35e93bfcaee045955b3"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "just-wef"
+version = "0.1.0"
+dependencies = [
+ "bindgen",
+ "tokio",
 ]
 
 [[package]]
@@ -2722,8 +2730,8 @@ dependencies = [
 name = "presentation_runtime"
 version = "0.1.0"
 dependencies = [
+ "just-wef",
  "tokio",
- "wef",
 ]
 
 [[package]]
@@ -4104,14 +4112,6 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "wef"
-version = "0.1.0"
-dependencies = [
- "bindgen",
- "tokio",
 ]
 
 [[package]]

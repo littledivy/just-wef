@@ -120,12 +120,6 @@ pub type WefCloseRequestedFn = unsafe extern "C" fn(
   *mut c_void, // user_data
   u32,         // window_id
 );
-pub type WefDialogResultFn = unsafe extern "C" fn(
-  *mut c_void,   // user_data
-  c_int,         // confirmed (1=ok, 0=cancel)
-  *const c_char, // input_value (prompt only, else null)
-);
-
 pub const WEF_DIALOG_ALERT: i32 = 0;
 pub const WEF_DIALOG_CONFIRM: i32 = 1;
 pub const WEF_DIALOG_PROMPT: i32 = 2;
@@ -300,16 +294,16 @@ pub struct WefBackendApi {
     Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
   pub show_dialog: Option<
     unsafe extern "C" fn(
-      *mut c_void,               // backend_data
-      u32,                       // window_id
-      c_int,                     // dialog_type
-      *const c_char,             // title
-      *const c_char,             // message
-      *const c_char,             // default_value
-      Option<WefDialogResultFn>, // callback
-      *mut c_void,               // callback_data
-    ),
+      *mut c_void,      // backend_data
+      u32,              // window_id
+      c_int,            // dialog_type
+      *const c_char,    // title
+      *const c_char,    // message
+      *const c_char,    // default_value
+      *mut *mut c_char, // out_input_value (prompt only; nullable)
+    ) -> c_int,
   >,
+  pub string_free: Option<unsafe extern "C" fn(*mut c_void, *mut c_char)>,
   pub set_dock_badge: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
   pub bounce_dock: Option<unsafe extern "C" fn(*mut c_void, c_int)>,
   pub set_dock_menu: Option<
@@ -958,6 +952,7 @@ pub fn create_api_base() -> WefBackendApi {
     open_devtools: None,
     set_js_namespace: None,
     show_dialog: None,
+    string_free: None,
     set_dock_badge: None,
     bounce_dock: None,
     set_dock_menu: None,
@@ -1084,17 +1079,6 @@ pub fn remove_window_handles(window_id: u32) {
   if let Some(m) = map.as_mut() {
     m.remove(&window_id);
   }
-}
-
-// --- Pending dialog ---
-
-pub struct PendingDialog {
-  pub dialog_type: i32,
-  pub title: String,
-  pub message: String,
-  pub default_value: String,
-  pub callback: Option<WefDialogResultFn>,
-  pub callback_data: usize,
 }
 
 // --- Menu types ---
@@ -1435,7 +1419,6 @@ pub struct WindowState {
   pub pending_resizable: Mutex<Option<bool>>,
   pub pending_always_on_top: Mutex<Option<bool>>,
   pub pending_visible: Mutex<Option<bool>>,
-  pub pending_dialog: Mutex<Option<PendingDialog>>,
   pub pending_app_menu: Mutex<Option<PendingMenu>>,
   pub pending_context_menu: Mutex<Option<PendingContextMenu>>,
   pub cursor_position: Mutex<(f64, f64)>,
@@ -1453,7 +1436,6 @@ impl WindowState {
       pending_resizable: Mutex::new(None),
       pending_always_on_top: Mutex::new(None),
       pending_visible: Mutex::new(None),
-      pending_dialog: Mutex::new(None),
       pending_app_menu: Mutex::new(None),
       pending_context_menu: Mutex::new(None),
       cursor_position: Mutex::new((0.0, 0.0)),
@@ -1511,7 +1493,6 @@ impl Default for EventHandlers {
 pub struct CommonState {
   pub windows: Mutex<HashMap<u32, WindowState>>,
   pub handlers: EventHandlers,
-  pub pending_global_dialog: Mutex<Option<PendingDialog>>,
 }
 
 impl CommonState {
@@ -1519,7 +1500,6 @@ impl CommonState {
     Self {
       windows: Mutex::new(HashMap::new()),
       handlers: EventHandlers::new(),
-      pending_global_dialog: Mutex::new(None),
     }
   }
 
@@ -1580,9 +1560,6 @@ pub enum CommonEvent {
     window_id: u32,
   },
   Focus {
-    window_id: u32,
-  },
-  ShowDialog {
     window_id: u32,
   },
   SetApplicationMenu {
@@ -2027,56 +2004,72 @@ macro_rules! define_common_backend_fns {
 
     unsafe extern "C" fn backend_show_dialog(
       _data: *mut ::std::ffi::c_void,
-      window_id: u32,
+      _window_id: u32,
       dialog_type: ::std::ffi::c_int,
       title: *const ::std::ffi::c_char,
       message: *const ::std::ffi::c_char,
       default_value: *const ::std::ffi::c_char,
-      callback: Option<$crate::WefDialogResultFn>,
-      callback_data: *mut ::std::ffi::c_void,
-    ) {
+      out_input_value: *mut *mut ::std::ffi::c_char,
+    ) -> ::std::ffi::c_int {
+      if !out_input_value.is_null() {
+        unsafe { *out_input_value = ::std::ptr::null_mut() };
+      }
       let title_str = if title.is_null() {
         String::new()
       } else {
-        ::std::ffi::CStr::from_ptr(title)
+        unsafe { ::std::ffi::CStr::from_ptr(title) }
           .to_string_lossy()
           .into_owned()
       };
       let message_str = if message.is_null() {
         String::new()
       } else {
-        ::std::ffi::CStr::from_ptr(message)
+        unsafe { ::std::ffi::CStr::from_ptr(message) }
           .to_string_lossy()
           .into_owned()
       };
       let default_str = if default_value.is_null() {
         String::new()
       } else {
-        ::std::ffi::CStr::from_ptr(default_value)
+        unsafe { ::std::ffi::CStr::from_ptr(default_value) }
           .to_string_lossy()
           .into_owned()
       };
-      if let Some(state) = <$B as $crate::BackendAccess>::get() {
-        let dialog = $crate::PendingDialog {
-          dialog_type,
-          title: title_str,
-          message: message_str,
-          default_value: default_str,
-          callback,
-          callback_data: callback_data as usize,
-        };
-        if window_id == 0 {
-          *state.common().pending_global_dialog.lock().unwrap() = Some(dialog);
-        } else {
-          state.common().with_window(window_id, |ws| {
-            *ws.pending_dialog.lock().unwrap() = Some(dialog);
-          });
+      // The platform modal APIs (NSAlert / MessageBoxW / gtk_dialog_run /
+      // rfd) themselves run a nested event loop, so they don't need help
+      // from the winit event loop to keep other windows responsive — call
+      // them directly.
+      let (confirmed, input) = $crate::show_native_dialog(
+        dialog_type,
+        &title_str,
+        &message_str,
+        &default_str,
+      );
+      if !out_input_value.is_null() {
+        if let Some(s) = input {
+          if let Ok(c_str) = ::std::ffi::CString::new(s) {
+            // SAFETY: out_input_value is non-null and the consumer frees
+            // the pointer via the backend's `string_free`.
+            unsafe { *out_input_value = c_str.into_raw() };
+          }
         }
-        let _ = state.proxy().send_event(
-          <$B as $crate::BackendAccess>::common_event(
-            $crate::CommonEvent::ShowDialog { window_id },
-          ),
-        );
+      }
+      if confirmed {
+        1
+      } else {
+        0
+      }
+    }
+
+    unsafe extern "C" fn backend_string_free(
+      _data: *mut ::std::ffi::c_void,
+      s: *mut ::std::ffi::c_char,
+    ) {
+      if !s.is_null() {
+        // SAFETY: pointer originated from `CString::into_raw` in
+        // `backend_show_dialog`; reclaiming the allocation is the
+        // matching deallocator.
+        let _ = unsafe { ::std::ffi::CString::from_raw(s) };
       }
     }
 
@@ -2420,6 +2413,7 @@ macro_rules! fill_common_api {
     $api.set_close_requested_handler =
       Some(backend_set_close_requested_handler);
     $api.show_dialog = Some(backend_show_dialog);
+    $api.string_free = Some(backend_string_free);
     $api.set_application_menu = Some(backend_set_application_menu);
     $api.show_context_menu = Some(backend_show_context_menu);
     $api.set_dock_badge = Some(backend_set_dock_badge);
@@ -2514,35 +2508,6 @@ pub fn handle_common_event<B: BackendAccess>(
     }
     CommonEvent::Focus { window_id: eid, .. } if *eid == window_id => {
       window.focus_window();
-      true
-    }
-    CommonEvent::ShowDialog { window_id: eid } if *eid == window_id => {
-      if let Some(state) = B::get() {
-        state.common().with_window(window_id, |ws| {
-          if let Some(dialog) = ws.pending_dialog.lock().unwrap().take() {
-            let (confirmed, input) = show_native_dialog(
-              dialog.dialog_type,
-              &dialog.title,
-              &dialog.message,
-              &dialog.default_value,
-            );
-            if let Some(cb) = dialog.callback {
-              let input_cstr = input
-                .as_ref()
-                .map(|s| std::ffi::CString::new(s.as_str()).unwrap());
-              let input_ptr =
-                input_cstr.as_ref().map_or(std::ptr::null(), |s| s.as_ptr());
-              unsafe {
-                cb(
-                  dialog.callback_data as *mut c_void,
-                  confirmed as c_int,
-                  input_ptr,
-                )
-              };
-            }
-          }
-        });
-      }
       true
     }
     CommonEvent::SetApplicationMenu { window_id: eid } if *eid == window_id => {
@@ -2676,36 +2641,6 @@ pub fn apply_pending_attrs(
 pub fn apply_pending_post_create(ws: &WindowState, window: &Window) {
   if let Some(true) = *ws.pending_always_on_top.lock().unwrap() {
     window.set_window_level(WindowLevel::AlwaysOnTop);
-  }
-}
-
-/// Handle an app-wide dialog (window_id == 0) that doesn't require a parent window.
-pub fn handle_global_dialog<B: BackendAccess>() {
-  if let Some(state) = B::get() {
-    if let Some(dialog) =
-      state.common().pending_global_dialog.lock().unwrap().take()
-    {
-      let (confirmed, input) = show_native_dialog(
-        dialog.dialog_type,
-        &dialog.title,
-        &dialog.message,
-        &dialog.default_value,
-      );
-      if let Some(cb) = dialog.callback {
-        let input_cstr = input
-          .as_ref()
-          .map(|s| std::ffi::CString::new(s.as_str()).unwrap());
-        let input_ptr =
-          input_cstr.as_ref().map_or(std::ptr::null(), |s| s.as_ptr());
-        unsafe {
-          cb(
-            dialog.callback_data as *mut c_void,
-            confirmed as c_int,
-            input_ptr,
-          )
-        };
-      }
-    }
   }
 }
 

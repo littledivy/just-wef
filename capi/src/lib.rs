@@ -29,7 +29,7 @@ pub use mouse::*;
 /// (`github.com/denoland/wef/releases/tag/v{VERSION}`).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub const WEF_API_VERSION: u32 = 21;
+pub const WEF_API_VERSION: u32 = 22;
 
 pub const WEF_WINDOW_HANDLE_UNKNOWN: i32 = 0;
 pub const WEF_WINDOW_HANDLE_APPKIT: i32 = 1;
@@ -937,124 +937,95 @@ impl Window {
     }
   }
 
-  /// Show an alert dialog with a message. Fire-and-forget.
+  /// Show an alert dialog. Blocks until dismissed.
   pub fn alert(&self, title: &str, message: &str) {
-    self.show_dialog_internal(
-      WEF_DIALOG_ALERT,
-      title,
-      message,
-      "",
-      None::<fn(bool, Option<String>)>,
-    );
+    show_dialog_blocking(self.id, WEF_DIALOG_ALERT, title, message, "");
   }
 
-  /// Show a confirm dialog. Callback receives `true` if OK was pressed.
-  pub fn confirm<F>(&self, title: &str, message: &str, callback: F)
-  where
-    F: FnOnce(bool) + Send + 'static,
-  {
-    self.show_dialog_internal(
-      WEF_DIALOG_CONFIRM,
-      title,
-      message,
-      "",
-      Some(move |confirmed: bool, _input: Option<String>| {
-        callback(confirmed);
-      }),
-    );
+  /// Show a confirm dialog. Returns `true` if OK was pressed. Blocks
+  /// until dismissed; while the modal is up the platform's event loop is
+  /// pumped so other WEF windows continue to render and respond.
+  pub fn confirm(&self, title: &str, message: &str) -> bool {
+    let (confirmed, _) =
+      show_dialog_blocking(self.id, WEF_DIALOG_CONFIRM, title, message, "");
+    confirmed
   }
 
-  /// Show a prompt dialog with a text input. Callback receives `Some(text)` if
-  /// OK was pressed, or `None` if cancelled.
-  pub fn prompt<F>(
+  /// Show a prompt dialog with a text input. Returns `Some(text)` if OK
+  /// was pressed, `None` if cancelled. Blocking semantics as `confirm`.
+  pub fn prompt(
     &self,
     title: &str,
     message: &str,
     default_value: &str,
-    callback: F,
-  ) where
-    F: FnOnce(Option<String>) + Send + 'static,
-  {
-    self.show_dialog_internal(
+  ) -> Option<String> {
+    let (confirmed, input) = show_dialog_blocking(
+      self.id,
       WEF_DIALOG_PROMPT,
       title,
       message,
       default_value,
-      Some(move |confirmed: bool, input: Option<String>| {
-        callback(if confirmed { input } else { None });
-      }),
     );
-  }
-
-  fn show_dialog_internal<F>(
-    &self,
-    dialog_type: i32,
-    title: &str,
-    message: &str,
-    default_value: &str,
-    callback: Option<F>,
-  ) where
-    F: FnOnce(bool, Option<String>) + Send + 'static,
-  {
-    let api = api();
-    if let Some(f) = api.show_dialog {
-      let c_title = CString::new(title).expect("Invalid title");
-      let c_message = CString::new(message).expect("Invalid message");
-      let c_default =
-        CString::new(default_value).expect("Invalid default value");
-
-      match callback {
-        Some(cb_fn) => {
-          unsafe extern "C" fn trampoline(
-            user_data: *mut c_void,
-            confirmed: c_int,
-            input_value: *const c_char,
-          ) {
-            let cb = Box::from_raw(
-              user_data as *mut Box<dyn FnOnce(bool, Option<String>) + Send>,
-            );
-            let input = if input_value.is_null() {
-              None
-            } else {
-              Some(CStr::from_ptr(input_value).to_string_lossy().into_owned())
-            };
-            cb(confirmed != 0, input);
-          }
-
-          let cb: Box<Box<dyn FnOnce(bool, Option<String>) + Send>> =
-            Box::new(Box::new(cb_fn));
-          let user_data = Box::into_raw(cb) as *mut c_void;
-
-          unsafe {
-            f(
-              api.backend_data,
-              self.id,
-              dialog_type as c_int,
-              c_title.as_ptr(),
-              c_message.as_ptr(),
-              c_default.as_ptr(),
-              Some(trampoline),
-              user_data,
-            )
-          };
-        }
-        None => {
-          unsafe {
-            f(
-              api.backend_data,
-              self.id,
-              dialog_type as c_int,
-              c_title.as_ptr(),
-              c_message.as_ptr(),
-              c_default.as_ptr(),
-              None,
-              std::ptr::null_mut(),
-            )
-          };
-        }
-      }
+    if confirmed {
+      input
+    } else {
+      None
     }
   }
+}
+
+/// Shared dialog implementation. `window_id == 0` ⇒ app-wide modal.
+/// Returns `(confirmed, input_value)`. `input_value` is `Some` only when
+/// the dialog was a prompt and the user confirmed.
+fn show_dialog_blocking(
+  window_id: u32,
+  dialog_type: i32,
+  title: &str,
+  message: &str,
+  default_value: &str,
+) -> (bool, Option<String>) {
+  let api = api();
+  let Some(f) = api.show_dialog else {
+    return (false, None);
+  };
+  let c_title = CString::new(title).expect("Invalid title");
+  let c_message = CString::new(message).expect("Invalid message");
+  let c_default = CString::new(default_value).expect("Invalid default value");
+  let mut out_input: *mut c_char = std::ptr::null_mut();
+  let want_input = dialog_type == WEF_DIALOG_PROMPT;
+  // SAFETY: All pointers are valid for the duration of the call. The
+  // backend may write a heap-allocated string into `out_input`; we hand it
+  // back to the backend's deallocator below.
+  let confirmed = unsafe {
+    f(
+      api.backend_data,
+      window_id,
+      dialog_type as c_int,
+      c_title.as_ptr(),
+      c_message.as_ptr(),
+      c_default.as_ptr(),
+      if want_input {
+        &mut out_input as *mut *mut c_char
+      } else {
+        std::ptr::null_mut()
+      },
+    )
+  } != 0;
+  let input = if !out_input.is_null() {
+    // SAFETY: backend just wrote a NUL-terminated UTF-8 string here.
+    let s = unsafe { CStr::from_ptr(out_input) }
+      .to_string_lossy()
+      .into_owned();
+    if let Some(free) = api.string_free {
+      // SAFETY: pointer originated from `f`, freed via the matching
+      // backend allocator.
+      unsafe { free(api.backend_data, out_input) };
+    }
+    Some(s)
+  } else {
+    None
+  };
+  (confirmed, input)
 }
 
 /// A menu item in an application menu template.
@@ -1644,112 +1615,34 @@ pub const WEF_DIALOG_ALERT: i32 = 0;
 pub const WEF_DIALOG_CONFIRM: i32 = 1;
 pub const WEF_DIALOG_PROMPT: i32 = 2;
 
-/// Show an alert dialog (app-wide, no parent window).
+/// Show an alert dialog (app-wide, no parent window). Blocks until
+/// dismissed; the platform's modal run loop pumps OS events while the
+/// dialog is up so other WEF windows continue to render and respond.
 pub fn alert(title: &str, message: &str) {
-  show_dialog_free(
-    WEF_DIALOG_ALERT,
-    title,
-    message,
-    "",
-    None::<fn(bool, Option<String>)>,
-  );
+  show_dialog_blocking(0, WEF_DIALOG_ALERT, title, message, "");
 }
 
-/// Show a confirm dialog (app-wide). Callback receives `true` if OK was pressed.
-pub fn confirm<F>(title: &str, message: &str, callback: F)
-where
-  F: FnOnce(bool) + Send + 'static,
-{
-  show_dialog_free(
-    WEF_DIALOG_CONFIRM,
-    title,
-    message,
-    "",
-    Some(move |confirmed: bool, _: Option<String>| callback(confirmed)),
-  );
+/// Show a confirm dialog (app-wide). Returns `true` if OK was pressed.
+/// Blocking semantics as `alert`.
+pub fn confirm(title: &str, message: &str) -> bool {
+  let (confirmed, _) =
+    show_dialog_blocking(0, WEF_DIALOG_CONFIRM, title, message, "");
+  confirmed
 }
 
-/// Show a prompt dialog (app-wide). Callback receives `Some(text)` if OK, `None` if cancelled.
-pub fn prompt<F>(title: &str, message: &str, default_value: &str, callback: F)
-where
-  F: FnOnce(Option<String>) + Send + 'static,
-{
-  show_dialog_free(
-    WEF_DIALOG_PROMPT,
-    title,
-    message,
-    default_value,
-    Some(move |confirmed: bool, input: Option<String>| {
-      callback(if confirmed { input } else { None });
-    }),
-  );
-}
-
-fn show_dialog_free<F>(
-  dialog_type: i32,
+/// Show a prompt dialog (app-wide). Returns `Some(text)` if OK, `None`
+/// if cancelled. Blocking semantics as `alert`.
+pub fn prompt(
   title: &str,
   message: &str,
   default_value: &str,
-  callback: Option<F>,
-) where
-  F: FnOnce(bool, Option<String>) + Send + 'static,
-{
-  let api = api();
-  if let Some(f) = api.show_dialog {
-    let c_title = CString::new(title).expect("Invalid title");
-    let c_message = CString::new(message).expect("Invalid message");
-    let c_default = CString::new(default_value).expect("Invalid default value");
-
-    match callback {
-      Some(cb_fn) => {
-        unsafe extern "C" fn trampoline(
-          user_data: *mut c_void,
-          confirmed: c_int,
-          input_value: *const c_char,
-        ) {
-          let cb = Box::from_raw(
-            user_data as *mut Box<dyn FnOnce(bool, Option<String>) + Send>,
-          );
-          let input = if input_value.is_null() {
-            None
-          } else {
-            Some(CStr::from_ptr(input_value).to_string_lossy().into_owned())
-          };
-          cb(confirmed != 0, input);
-        }
-
-        let cb: Box<Box<dyn FnOnce(bool, Option<String>) + Send>> =
-          Box::new(Box::new(cb_fn));
-        let user_data = Box::into_raw(cb) as *mut c_void;
-
-        unsafe {
-          f(
-            api.backend_data,
-            0, // no parent window
-            dialog_type as c_int,
-            c_title.as_ptr(),
-            c_message.as_ptr(),
-            c_default.as_ptr(),
-            Some(trampoline),
-            user_data,
-          )
-        };
-      }
-      None => {
-        unsafe {
-          f(
-            api.backend_data,
-            0,
-            dialog_type as c_int,
-            c_title.as_ptr(),
-            c_message.as_ptr(),
-            c_default.as_ptr(),
-            None,
-            std::ptr::null_mut(),
-          )
-        };
-      }
-    }
+) -> Option<String> {
+  let (confirmed, input) =
+    show_dialog_blocking(0, WEF_DIALOG_PROMPT, title, message, default_value);
+  if confirmed {
+    input
+  } else {
+    None
   }
 }
 

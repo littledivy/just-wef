@@ -454,9 +454,9 @@ class WebView2Backend : public WefBackend {
 
   void OpenDevTools(uint32_t window_id) override;
 
-  void ShowDialog(uint32_t window_id, int dialog_type, const std::string& title,
-                  const std::string& message, const std::string& default_value,
-                  wef_dialog_result_fn callback, void* callback_data) override;
+  int ShowDialog(uint32_t window_id, int dialog_type, const std::string& title,
+                 const std::string& message, const std::string& default_value,
+                 char** out_input_value) override;
 
   void BounceDock(int type) override;
   void SetDockBadge(const char* badge_or_null) override;
@@ -1198,12 +1198,13 @@ void WebView2Backend::OpenDevTools(uint32_t window_id) {
 // Dialog
 // ============================================================================
 
-void WebView2Backend::ShowDialog(uint32_t window_id, int dialog_type,
-                                 const std::string& title,
-                                 const std::string& message,
-                                 const std::string& default_value,
-                                 wef_dialog_result_fn callback,
-                                 void* callback_data) {
+int WebView2Backend::ShowDialog(uint32_t window_id, int dialog_type,
+                                const std::string& title,
+                                const std::string& message,
+                                const std::string& default_value,
+                                char** out_input_value) {
+  if (out_input_value)
+    *out_input_value = nullptr;
   // Convert strings to wide strings for Win32 API
   auto toWide = [](const std::string& s) -> std::wstring {
     if (s.empty())
@@ -1225,13 +1226,11 @@ void WebView2Backend::ShowDialog(uint32_t window_id, int dialog_type,
   if (dialog_type == WEF_DIALOG_ALERT) {
     MessageBoxW(hwnd, wMessage.c_str(), wTitle.c_str(),
                 MB_OK | MB_ICONINFORMATION);
-    if (callback)
-      callback(callback_data, 1, nullptr);
+    return 1;
   } else if (dialog_type == WEF_DIALOG_CONFIRM) {
     int ret = MessageBoxW(hwnd, wMessage.c_str(), wTitle.c_str(),
                           MB_OKCANCEL | MB_ICONQUESTION);
-    if (callback)
-      callback(callback_data, (ret == IDOK) ? 1 : 0, nullptr);
+    return (ret == IDOK) ? 1 : 0;
   } else if (dialog_type == WEF_DIALOG_PROMPT) {
     // Windows does not have a built-in prompt dialog, so use PowerShell
     std::string script =
@@ -1241,29 +1240,24 @@ void WebView2Backend::ShowDialog(uint32_t window_id, int dialog_type,
     std::string cmd = "powershell -Command \"" + script + "\"";
 
     FILE* fp = _popen(cmd.c_str(), "r");
-    if (fp) {
-      char buf[4096] = {};
-      std::string result;
-      while (fgets(buf, sizeof(buf), fp)) {
-        result += buf;
-      }
-      int ret = _pclose(fp);
-      // Trim trailing whitespace
-      while (!result.empty() &&
-             (result.back() == '\n' || result.back() == '\r'))
-        result.pop_back();
-      if (!result.empty()) {
-        if (callback)
-          callback(callback_data, 1, result.c_str());
-      } else {
-        if (callback)
-          callback(callback_data, 0, nullptr);
-      }
-    } else {
-      if (callback)
-        callback(callback_data, 0, nullptr);
+    if (!fp)
+      return 0;
+    char buf[4096] = {};
+    std::string result;
+    while (fgets(buf, sizeof(buf), fp)) {
+      result += buf;
     }
+    _pclose(fp);
+    // Trim trailing whitespace
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
+      result.pop_back();
+    if (result.empty())
+      return 0;
+    if (out_input_value)
+      *out_input_value = _strdup(result.c_str());
+    return 1;
   }
+  return 0;
 }
 
 // ============================================================================

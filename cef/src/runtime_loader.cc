@@ -1688,81 +1688,87 @@ static void Backend_SetCloseRequestedHandler(void* data,
   loader->SetCloseRequestedHandler(handler, user_data);
 }
 
-static void Backend_ShowDialog(void* data, uint32_t window_id, int dialog_type,
-                               const char* title, const char* message,
-                               const char* default_value,
-                               wef_dialog_result_fn callback,
-                               void* callback_data) {
+static int Backend_ShowDialog(void* /*data*/, uint32_t /*window_id*/,
+                              int dialog_type, const char* title,
+                              const char* message, const char* default_value,
+                              char** out_input_value) {
+  if (out_input_value)
+    *out_input_value = nullptr;
   std::string title_str = title ? title : "";
   std::string message_str = message ? message : "";
   std::string default_str = default_value ? default_value : "";
 
 #ifdef __APPLE__
-  ShowNativeDialog_Mac(dialog_type, title_str.c_str(), message_str.c_str(),
-                       default_str.c_str(), callback, callback_data);
+  return ShowNativeDialog_Mac(dialog_type, title_str.c_str(),
+                              message_str.c_str(), default_str.c_str(),
+                              out_input_value);
 #elif defined(__linux__)
-  // Use zenity for dialogs on Linux
+  // Use zenity for dialogs on Linux. zenity itself runs a nested GTK loop;
+  // system()/popen() block until it exits.
   std::string cmd;
   if (dialog_type == WEF_DIALOG_ALERT) {
     cmd = "zenity --info --title=\"" + title_str + "\" --text=\"" +
           message_str + "\" 2>/dev/null";
-    int ret = system(cmd.c_str());
-    if (callback)
-      callback(callback_data, (ret == 0) ? 1 : 0, nullptr);
+    system(cmd.c_str());
+    return 1;
   } else if (dialog_type == WEF_DIALOG_CONFIRM) {
     cmd = "zenity --question --title=\"" + title_str + "\" --text=\"" +
           message_str + "\" 2>/dev/null";
     int ret = system(cmd.c_str());
-    if (callback)
-      callback(callback_data, (ret == 0) ? 1 : 0, nullptr);
+    return (ret == 0) ? 1 : 0;
   } else if (dialog_type == WEF_DIALOG_PROMPT) {
     cmd = "zenity --entry --title=\"" + title_str + "\" --text=\"" +
           message_str + "\" --entry-text=\"" + default_str + "\" 2>/dev/null";
     FILE* fp = popen(cmd.c_str(), "r");
-    if (fp) {
-      char buf[4096] = {};
-      if (fgets(buf, sizeof(buf), fp)) {
-        // Remove trailing newline
-        size_t len = strlen(buf);
-        if (len > 0 && buf[len - 1] == '\n')
-          buf[len - 1] = '\0';
-      }
-      int ret = pclose(fp);
-      if (callback)
-        callback(callback_data, (ret == 0) ? 1 : 0, (ret == 0) ? buf : nullptr);
-    } else {
-      if (callback)
-        callback(callback_data, 0, nullptr);
+    if (!fp)
+      return 0;
+    char buf[4096] = {};
+    if (fgets(buf, sizeof(buf), fp)) {
+      size_t len = strlen(buf);
+      if (len > 0 && buf[len - 1] == '\n')
+        buf[len - 1] = '\0';
     }
+    int ret = pclose(fp);
+    if (ret != 0)
+      return 0;
+    if (out_input_value)
+      *out_input_value = strdup(buf);
+    return 1;
   }
+  return 0;
 #elif defined(_WIN32)
-  CefPostTask(TID_UI,
-              base::BindOnce(
-                  [](int dtype, std::string t, std::string m, std::string d,
-                     wef_dialog_result_fn cb, void* cb_data) {
-                    if (dtype == WEF_DIALOG_ALERT) {
-                      MessageBoxA(nullptr, m.c_str(), t.c_str(),
-                                  MB_OK | MB_ICONINFORMATION);
-                      if (cb)
-                        cb(cb_data, 1, nullptr);
-                    } else if (dtype == WEF_DIALOG_CONFIRM) {
-                      int ret = MessageBoxA(nullptr, m.c_str(), t.c_str(),
-                                            MB_OKCANCEL | MB_ICONQUESTION);
-                      if (cb)
-                        cb(cb_data, (ret == IDOK) ? 1 : 0, nullptr);
-                    } else if (dtype == WEF_DIALOG_PROMPT) {
-                      // Use default value as result for now (Windows prompt
-                      // requires custom dialog)
-                      int ret = MessageBoxA(nullptr, m.c_str(), t.c_str(),
-                                            MB_OKCANCEL | MB_ICONQUESTION);
-                      if (cb)
-                        cb(cb_data, (ret == IDOK) ? 1 : 0,
-                           (ret == IDOK) ? d.c_str() : nullptr);
-                    }
-                  },
-                  dialog_type, title_str, message_str, default_str, callback,
-                  callback_data));
+  // CEF's TID_UI is the same OS thread we were called on (the main thread
+  // for our consumers). We can't `CefPostTask` and wait — that would
+  // deadlock. Call MessageBoxW directly; it pumps the Win32 message loop
+  // for the duration of the modal so other CEF windows keep responding.
+  if (dialog_type == WEF_DIALOG_ALERT) {
+    MessageBoxA(nullptr, message_str.c_str(), title_str.c_str(),
+                MB_OK | MB_ICONINFORMATION);
+    return 1;
+  } else if (dialog_type == WEF_DIALOG_CONFIRM) {
+    int ret = MessageBoxA(nullptr, message_str.c_str(), title_str.c_str(),
+                          MB_OKCANCEL | MB_ICONQUESTION);
+    return (ret == IDOK) ? 1 : 0;
+  } else if (dialog_type == WEF_DIALOG_PROMPT) {
+    // Windows still doesn't have a built-in prompt dialog. Until a custom
+    // dialog is wired in, show the message and on OK return the default.
+    int ret = MessageBoxA(nullptr, message_str.c_str(), title_str.c_str(),
+                          MB_OKCANCEL | MB_ICONQUESTION);
+    if (ret != IDOK)
+      return 0;
+    if (out_input_value)
+      *out_input_value = _strdup(default_str.c_str());
+    return 1;
+  }
+  return 0;
+#else
+  return 0;
 #endif
+}
+
+static void Backend_StringFree(void* /*data*/, char* s) {
+  if (s)
+    free(s);
 }
 
 void RuntimeLoader::InitializeBackendApi() {
@@ -1900,6 +1906,7 @@ void RuntimeLoader::InitializeBackendApi() {
   backend_api_.open_devtools = Backend_OpenDevTools;
   backend_api_.set_js_namespace = Backend_SetJsNamespace;
   backend_api_.show_dialog = Backend_ShowDialog;
+  backend_api_.string_free = Backend_StringFree;
 
   // --- Dock / taskbar ---
 #if defined(__APPLE__)

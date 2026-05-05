@@ -199,9 +199,6 @@ impl ApplicationHandler<UserEvent> for App {
         CommonEvent::UiTask { task, data } => {
           unsafe { task(*data as *mut c_void) };
         }
-        CommonEvent::ShowDialog { window_id: 0 } => {
-          wef_backend_winit_common::handle_global_dialog::<BackendState>();
-        }
         CommonEvent::DockTask => {
           wef_backend_winit_common::dock::drain_and_apply(
             self.focused_window(),
@@ -220,7 +217,6 @@ impl ApplicationHandler<UserEvent> for App {
             | CommonEvent::Show { window_id }
             | CommonEvent::Hide { window_id }
             | CommonEvent::Focus { window_id }
-            | CommonEvent::ShowDialog { window_id }
             | CommonEvent::SetApplicationMenu { window_id }
             | CommonEvent::ShowContextMenu { window_id } => *window_id,
             _ => return,

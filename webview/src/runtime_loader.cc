@@ -576,20 +576,25 @@ static void Backend_SetCloseRequestedHandler(void* data,
   loader->SetCloseRequestedHandler(handler, user_data);
 }
 
-static void Backend_ShowDialog(void* data, uint32_t window_id, int dialog_type,
-                               const char* title, const char* message,
-                               const char* default_value,
-                               wef_dialog_result_fn callback,
-                               void* callback_data) {
+static int Backend_ShowDialog(void* data, uint32_t window_id, int dialog_type,
+                              const char* title, const char* message,
+                              const char* default_value,
+                              char** out_input_value) {
+  if (out_input_value)
+    *out_input_value = nullptr;
   RuntimeLoader* loader = static_cast<RuntimeLoader*>(data);
   WefBackend* backend = loader->GetBackend();
-  if (backend) {
-    std::string t = title ? title : "";
-    std::string m = message ? message : "";
-    std::string d = default_value ? default_value : "";
-    backend->ShowDialog(window_id, dialog_type, t, m, d, callback,
-                        callback_data);
-  }
+  if (!backend)
+    return 0;
+  std::string t = title ? title : "";
+  std::string m = message ? message : "";
+  std::string d = default_value ? default_value : "";
+  return backend->ShowDialog(window_id, dialog_type, t, m, d, out_input_value);
+}
+
+static void Backend_StringFree(void* /*backend_data*/, char* s) {
+  if (s)
+    free(s);
 }
 
 // --- Dock / taskbar ---
@@ -792,6 +797,7 @@ void RuntimeLoader::InitializeBackendApi() {
   backend_api_.close_window = Backend_CloseWindow;
   backend_api_.set_close_requested_handler = Backend_SetCloseRequestedHandler;
   backend_api_.show_dialog = Backend_ShowDialog;
+  backend_api_.string_free = Backend_StringFree;
 
   backend_api_.set_dock_badge = Backend_SetDockBadge;
   backend_api_.bounce_dock = Backend_BounceDock;

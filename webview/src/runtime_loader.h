@@ -348,11 +348,17 @@ class WefBackend {
 
   virtual void OpenDevTools(uint32_t window_id) = 0;
 
-  virtual void ShowDialog(uint32_t window_id, int dialog_type,
-                          const std::string& title, const std::string& message,
-                          const std::string& default_value,
-                          wef_dialog_result_fn callback,
-                          void* callback_data) = 0;
+  // Show a modal dialog and BLOCK until the user dismisses it. Backends
+  // run the platform's native modal loop (`runModal` / `MessageBoxW` /
+  // `gtk_dialog_run`), which itself pumps OS events while the dialog is
+  // up so other WEF windows continue to render and respond.
+  // Returns 1 if OK was pressed, 0 otherwise. For prompts, on a confirmed
+  // result `*out_input_value` is set to a `strdup`'d UTF-8 string the
+  // caller frees via `BackendStringFree`. NULL otherwise.
+  virtual int ShowDialog(uint32_t window_id, int dialog_type,
+                         const std::string& title, const std::string& message,
+                         const std::string& default_value,
+                         char** out_input_value) = 0;
 
   // --- Dock / taskbar ---
   // Default implementations are no-ops so platforms that don't support a

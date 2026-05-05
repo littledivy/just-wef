@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#define WEF_API_VERSION 21
+#define WEF_API_VERSION 22
 
 // Window handle types for get_window_handle_type
 #define WEF_WINDOW_HANDLE_UNKNOWN 0
@@ -83,14 +83,6 @@ typedef void (*wef_dock_reopen_fn)(void* user_data, bool has_visible_windows);
 // Callback fired when the user left-clicks a tray / status-bar icon.
 // (Right-click is reserved for the tray's menu.)
 typedef void (*wef_tray_click_fn)(void* user_data, uint32_t tray_id);
-
-// Callback for dialog results.
-typedef void (*wef_dialog_result_fn)(
-    void* user_data,
-    int confirmed,  // 1 = OK/Yes, 0 = Cancel/No
-    const char*
-        input_value  // For prompt: user input text. NULL for alert/confirm.
-);
 
 // Callback for mouse click events.
 typedef void (*wef_mouse_click_fn)(
@@ -339,16 +331,30 @@ struct wef_backend_api {
   // Must be called before creating any windows.
   void (*set_js_namespace)(void* backend_data, const char* name);
 
-  // Show a native dialog (alert, confirm, or prompt).
-  // The callback is invoked with the result after the user dismisses the
-  // dialog.
-  void (*show_dialog)(
+  // Show a native dialog (alert, confirm, or prompt) and BLOCK until the
+  // user dismisses it. Must be called on the main / UI thread (the same
+  // thread the WEF event loop runs on); backends use the platform's modal
+  // run loop (`runModal` / `MessageBoxW` / `gtk_dialog_run`) which itself
+  // pumps OS events while the dialog is up, so other WEF windows continue
+  // to render and respond.
+  //
+  // Returns 1 if the user clicked OK/Yes, 0 otherwise.
+  // For WEF_DIALOG_PROMPT, on a confirmed result `*out_input_value` is set
+  // to a heap-allocated UTF-8 string the caller must free by calling
+  // `string_free` (below). For alert/confirm, or on cancel, set to NULL.
+  // Pass NULL for `out_input_value` if you don't need the input value.
+  int (*show_dialog)(
       void* backend_data, uint32_t window_id,
       int dialog_type,  // WEF_DIALOG_*
       const char* title, const char* message,
       const char* default_value,  // For prompt: default input text. NULL for
                                   // alert/confirm.
-      wef_dialog_result_fn callback, void* callback_data);
+      char** out_input_value);
+
+  // Free a string returned by `show_dialog` (the prompt input value).
+  // Routed through the backend so the matching allocator is used (avoids
+  // cross-runtime free hazards on Windows MSVC). Safe to call with NULL.
+  void (*string_free)(void* backend_data, char* s);
 
   // --- Dock / taskbar ---
   //

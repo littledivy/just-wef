@@ -607,9 +607,9 @@ class WebKitGTKBackend : public WefBackend {
 
   void OpenDevTools(uint32_t window_id) override;
 
-  void ShowDialog(uint32_t window_id, int dialog_type, const std::string& title,
-                  const std::string& message, const std::string& default_value,
-                  wef_dialog_result_fn callback, void* callback_data) override;
+  int ShowDialog(uint32_t window_id, int dialog_type, const std::string& title,
+                 const std::string& message, const std::string& default_value,
+                 char** out_input_value) override;
 
   void BounceDock(int type) override;
   void SetDockBadge(const char* badge_or_null) override;
@@ -1521,12 +1521,13 @@ void WebKitGTKBackend::OpenDevTools(uint32_t window_id) {
 // Dialog
 // ============================================================================
 
-void WebKitGTKBackend::ShowDialog(uint32_t window_id, int dialog_type,
-                                  const std::string& title,
-                                  const std::string& message,
-                                  const std::string& default_value,
-                                  wef_dialog_result_fn callback,
-                                  void* callback_data) {
+int WebKitGTKBackend::ShowDialog(uint32_t window_id, int dialog_type,
+                                 const std::string& title,
+                                 const std::string& message,
+                                 const std::string& default_value,
+                                 char** out_input_value) {
+  if (out_input_value)
+    *out_input_value = nullptr;
   GtkWindow* parent = nullptr;
   auto* win = GetWindow(window_id);
   if (win && win->window)
@@ -1539,8 +1540,7 @@ void WebKitGTKBackend::ShowDialog(uint32_t window_id, int dialog_type,
     gtk_window_set_title(GTK_WINDOW(dialog), title.c_str());
     gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
-    if (callback)
-      callback(callback_data, 1, nullptr);
+    return 1;
   } else if (dialog_type == WEF_DIALOG_CONFIRM) {
     GtkWidget* dialog =
         gtk_message_dialog_new(parent, GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
@@ -1548,8 +1548,7 @@ void WebKitGTKBackend::ShowDialog(uint32_t window_id, int dialog_type,
     gtk_window_set_title(GTK_WINDOW(dialog), title.c_str());
     gint result = gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
-    if (callback)
-      callback(callback_data, (result == GTK_RESPONSE_OK) ? 1 : 0, nullptr);
+    return (result == GTK_RESPONSE_OK) ? 1 : 0;
   } else if (dialog_type == WEF_DIALOG_PROMPT) {
     GtkWidget* dialog = gtk_dialog_new_with_buttons(
         title.c_str(), parent,
@@ -1570,14 +1569,14 @@ void WebKitGTKBackend::ShowDialog(uint32_t window_id, int dialog_type,
     std::string result_text = text ? text : "";
     gtk_widget_destroy(dialog);
 
-    if (callback) {
-      if (result == GTK_RESPONSE_OK) {
-        callback(callback_data, 1, result_text.c_str());
-      } else {
-        callback(callback_data, 0, nullptr);
-      }
+    if (result == GTK_RESPONSE_OK) {
+      if (out_input_value)
+        *out_input_value = strdup(result_text.c_str());
+      return 1;
     }
+    return 0;
   }
+  return 0;
 }
 
 // ============================================================================

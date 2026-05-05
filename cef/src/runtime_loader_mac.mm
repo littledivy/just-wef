@@ -342,15 +342,23 @@ NativeDialogResult ShowNativeJSDialog_Mac(int type, const std::string& message,
 
 // --- Native Dialog (macOS) ---
 
-void ShowNativeDialog_Mac(int dialog_type, const char* title,
-                          const char* message, const char* default_value,
-                          wef_dialog_result_fn callback, void* callback_data) {
+int ShowNativeDialog_Mac(int dialog_type, const char* title,
+                         const char* message, const char* default_value,
+                         char** out_input_value) {
+  if (out_input_value)
+    *out_input_value = nullptr;
   NSString* nsTitle = title ? [NSString stringWithUTF8String:title] : @"";
   NSString* nsMessage = message ? [NSString stringWithUTF8String:message] : @"";
   NSString* nsDefault =
       default_value ? [NSString stringWithUTF8String:default_value] : @"";
 
-  dispatch_async(dispatch_get_main_queue(), ^{
+  // `runModal` itself spins NSRunLoop, pumping AppKit events for other
+  // CEF windows while the dialog is up. Done on main directly when the
+  // caller is already there (the typical case for the Deno runtime),
+  // otherwise dispatch_sync forwards.
+  __block bool confirmed = false;
+  __block char* input_strdup = nullptr;
+  void (^body)(void) = ^{
     NSAlert* alert = [[NSAlert alloc] init];
     [alert setMessageText:nsTitle];
     [alert setInformativeText:nsMessage];
@@ -369,23 +377,27 @@ void ShowNativeDialog_Mac(int dialog_type, const char* title,
           [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 300, 24)];
       [inputField setStringValue:nsDefault];
       [alert setAccessoryView:inputField];
-      // Make the text field first responder
       [alert layout];
       [[alert window] makeFirstResponder:inputField];
     }
 
     NSModalResponse response = [alert runModal];
-    bool confirmed = (response == NSAlertFirstButtonReturn);
-
-    if (callback) {
-      if (dialog_type == WEF_DIALOG_PROMPT && confirmed && inputField) {
-        const char* text = [[inputField stringValue] UTF8String];
-        callback(callback_data, 1, text);
-      } else {
-        callback(callback_data, confirmed ? 1 : 0, nullptr);
-      }
+    confirmed = (response == NSAlertFirstButtonReturn);
+    if (dialog_type == WEF_DIALOG_PROMPT && confirmed && inputField &&
+        out_input_value) {
+      const char* text = [[inputField stringValue] UTF8String];
+      if (text)
+        input_strdup = strdup(text);
     }
-  });
+  };
+  if ([NSThread isMainThread]) {
+    body();
+  } else {
+    dispatch_sync(dispatch_get_main_queue(), body);
+  }
+  if (out_input_value)
+    *out_input_value = input_strdup;
+  return confirmed ? 1 : 0;
 }
 
 // --- Application Menu (macOS) ---

@@ -76,9 +76,9 @@ class WKWebViewBackend : public WefBackend {
 
   void OpenDevTools(uint32_t window_id) override;
 
-  void ShowDialog(uint32_t window_id, int dialog_type, const std::string& title,
-                  const std::string& message, const std::string& default_value,
-                  wef_dialog_result_fn callback, void* callback_data) override;
+  int ShowDialog(uint32_t window_id, int dialog_type, const std::string& title,
+                 const std::string& message, const std::string& default_value,
+                 char** out_input_value) override;
 
   void SetDockBadge(const char* badge_or_null) override;
   void BounceDock(int type) override;
@@ -1758,17 +1758,26 @@ void WKWebViewBackend::OpenDevTools(uint32_t window_id) {
   });
 }
 
-void WKWebViewBackend::ShowDialog(uint32_t window_id, int dialog_type,
-                                  const std::string& title,
-                                  const std::string& message,
-                                  const std::string& default_value,
-                                  wef_dialog_result_fn callback,
-                                  void* callback_data) {
+int WKWebViewBackend::ShowDialog(uint32_t /*window_id*/, int dialog_type,
+                                 const std::string& title,
+                                 const std::string& message,
+                                 const std::string& default_value,
+                                 char** out_input_value) {
+  if (out_input_value)
+    *out_input_value = nullptr;
+
   NSString* nsTitle = [NSString stringWithUTF8String:title.c_str()];
   NSString* nsMessage = [NSString stringWithUTF8String:message.c_str()];
   NSString* nsDefault = [NSString stringWithUTF8String:default_value.c_str()];
 
-  dispatch_async(dispatch_get_main_queue(), ^{
+  // The block runs the modal — `runModal` itself spins NSRunLoop, so other
+  // WEF windows / dispatch queues continue to drain while it's up. Done as
+  // dispatch_sync so callers off the main thread are forwarded to it (the
+  // typical Deno-runtime caller is *already* on main, in which case
+  // dispatch_sync executes the block immediately on this thread).
+  __block bool confirmed = false;
+  __block char* input_strdup = nullptr;
+  void (^body)(void) = ^{
     NSAlert* alert = [[NSAlert alloc] init];
     [alert setMessageText:nsTitle];
     [alert setInformativeText:nsMessage];
@@ -1792,17 +1801,22 @@ void WKWebViewBackend::ShowDialog(uint32_t window_id, int dialog_type,
     }
 
     NSModalResponse response = [alert runModal];
-    bool confirmed = (response == NSAlertFirstButtonReturn);
-
-    if (callback) {
-      if (dialog_type == WEF_DIALOG_PROMPT && confirmed && inputField) {
-        const char* text = [[inputField stringValue] UTF8String];
-        callback(callback_data, 1, text);
-      } else {
-        callback(callback_data, confirmed ? 1 : 0, nullptr);
-      }
+    confirmed = (response == NSAlertFirstButtonReturn);
+    if (dialog_type == WEF_DIALOG_PROMPT && confirmed && inputField &&
+        out_input_value) {
+      const char* text = [[inputField stringValue] UTF8String];
+      if (text)
+        input_strdup = strdup(text);
     }
-  });
+  };
+  if ([NSThread isMainThread]) {
+    body();
+  } else {
+    dispatch_sync(dispatch_get_main_queue(), body);
+  }
+  if (out_input_value)
+    *out_input_value = input_strdup;
+  return confirmed ? 1 : 0;
 }
 
 // --- Dock (macOS) ---
