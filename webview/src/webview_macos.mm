@@ -5,6 +5,7 @@
 #import <WebKit/WebKit.h>
 
 #include "runtime_loader.h"
+#include "wef_backend_common.h"
 #include "wef_json.h"
 
 #include <atomic>
@@ -282,246 +283,13 @@ static void UnregisterNSWindow(NSWindow* win) {
 
 namespace {
 
-std::string NSEventKeyToString(NSEvent* event) {
-  NSString* chars = [event characters];
-  if (chars && [chars length] > 0) {
-    unichar c = [chars characterAtIndex:0];
-    // Map special characters to W3C key values
-    switch (c) {
-      case NSUpArrowFunctionKey:
-        return "ArrowUp";
-      case NSDownArrowFunctionKey:
-        return "ArrowDown";
-      case NSLeftArrowFunctionKey:
-        return "ArrowLeft";
-      case NSRightArrowFunctionKey:
-        return "ArrowRight";
-      case NSHomeFunctionKey:
-        return "Home";
-      case NSEndFunctionKey:
-        return "End";
-      case NSPageUpFunctionKey:
-        return "PageUp";
-      case NSPageDownFunctionKey:
-        return "PageDown";
-      case NSDeleteFunctionKey:
-        return "Delete";
-      case NSInsertFunctionKey:
-        return "Insert";
-      case NSF1FunctionKey:
-        return "F1";
-      case NSF2FunctionKey:
-        return "F2";
-      case NSF3FunctionKey:
-        return "F3";
-      case NSF4FunctionKey:
-        return "F4";
-      case NSF5FunctionKey:
-        return "F5";
-      case NSF6FunctionKey:
-        return "F6";
-      case NSF7FunctionKey:
-        return "F7";
-      case NSF8FunctionKey:
-        return "F8";
-      case NSF9FunctionKey:
-        return "F9";
-      case NSF10FunctionKey:
-        return "F10";
-      case NSF11FunctionKey:
-        return "F11";
-      case NSF12FunctionKey:
-        return "F12";
-      case 27:
-        return "Escape";
-      case 13:
-      case 3:
-        return "Enter";
-      case 9:
-        return "Tab";
-      case 127:
-        return "Backspace";
-      case 32:
-        return " ";
-      default:
-        if (c >= 0x20 && c < 0x7F) {
-          return std::string(1, static_cast<char>(c));
-        }
-        return [chars UTF8String] ?: "Unidentified";
-    }
-  }
-  return "Unidentified";
+// NSEvent → W3C key/code lives in backend-common (wef_common::NSEventKeyToKey
+// / NSEventKeyToCode). Local aliases keep the existing callers compiling.
+inline std::string NSEventKeyToString(NSEvent* event) {
+  return wef_common::NSEventKeyToKey((__bridge void*)event);
 }
-
-std::string NSEventKeyCodeToCode(unsigned short keyCode) {
-  switch (keyCode) {
-    case 0:
-      return "KeyA";
-    case 1:
-      return "KeyS";
-    case 2:
-      return "KeyD";
-    case 3:
-      return "KeyF";
-    case 4:
-      return "KeyH";
-    case 5:
-      return "KeyG";
-    case 6:
-      return "KeyZ";
-    case 7:
-      return "KeyX";
-    case 8:
-      return "KeyC";
-    case 9:
-      return "KeyV";
-    case 11:
-      return "KeyB";
-    case 12:
-      return "KeyQ";
-    case 13:
-      return "KeyW";
-    case 14:
-      return "KeyE";
-    case 15:
-      return "KeyR";
-    case 16:
-      return "KeyY";
-    case 17:
-      return "KeyT";
-    case 18:
-      return "Digit1";
-    case 19:
-      return "Digit2";
-    case 20:
-      return "Digit3";
-    case 21:
-      return "Digit4";
-    case 22:
-      return "Digit6";
-    case 23:
-      return "Digit5";
-    case 24:
-      return "Equal";
-    case 25:
-      return "Digit9";
-    case 26:
-      return "Digit7";
-    case 27:
-      return "Minus";
-    case 28:
-      return "Digit8";
-    case 29:
-      return "Digit0";
-    case 30:
-      return "BracketRight";
-    case 31:
-      return "KeyO";
-    case 32:
-      return "KeyU";
-    case 33:
-      return "BracketLeft";
-    case 34:
-      return "KeyI";
-    case 35:
-      return "KeyP";
-    case 36:
-      return "Enter";
-    case 37:
-      return "KeyL";
-    case 38:
-      return "KeyJ";
-    case 39:
-      return "Quote";
-    case 40:
-      return "KeyK";
-    case 41:
-      return "Semicolon";
-    case 42:
-      return "Backslash";
-    case 43:
-      return "Comma";
-    case 44:
-      return "Slash";
-    case 45:
-      return "KeyN";
-    case 46:
-      return "KeyM";
-    case 47:
-      return "Period";
-    case 48:
-      return "Tab";
-    case 49:
-      return "Space";
-    case 50:
-      return "Backquote";
-    case 51:
-      return "Backspace";
-    case 53:
-      return "Escape";
-    case 55:
-      return "MetaLeft";
-    case 56:
-      return "ShiftLeft";
-    case 57:
-      return "CapsLock";
-    case 58:
-      return "AltLeft";
-    case 59:
-      return "ControlLeft";
-    case 60:
-      return "ShiftRight";
-    case 61:
-      return "AltRight";
-    case 62:
-      return "ControlRight";
-    case 96:
-      return "F5";
-    case 97:
-      return "F6";
-    case 98:
-      return "F7";
-    case 99:
-      return "F3";
-    case 100:
-      return "F8";
-    case 101:
-      return "F9";
-    case 109:
-      return "F10";
-    case 103:
-      return "F11";
-    case 111:
-      return "F12";
-    case 118:
-      return "F4";
-    case 120:
-      return "F2";
-    case 122:
-      return "F1";
-    case 123:
-      return "ArrowLeft";
-    case 124:
-      return "ArrowRight";
-    case 125:
-      return "ArrowDown";
-    case 126:
-      return "ArrowUp";
-    case 117:
-      return "Delete";
-    case 114:
-      return "Insert";
-    case 115:
-      return "Home";
-    case 119:
-      return "End";
-    case 116:
-      return "PageUp";
-    case 121:
-      return "PageDown";
-    default:
-      return "Unidentified";
-  }
+inline std::string NSEventKeyCodeToCode(unsigned short keyCode) {
+  return wef_common::NSEventKeyToCode(keyCode);
 }
 
 uint32_t NSModifierFlagsToWef(NSEventModifierFlags flags) {
@@ -1440,272 +1208,19 @@ void WKWebViewBackend::HandleJsMessage(uint32_t window_id, uint64_t call_id,
   RuntimeLoader::GetInstance()->OnJsCall(window_id, call_id, method, args);
 }
 
-// --- Application Menu ---
+// --- Application Menu / Context Menu ---
+//
+// Menu construction lives in backend-common (wef_common::BuildNSMenuFromValue).
 
-static wef_menu_click_fn g_webview_menu_click_fn = nullptr;
-static void* g_webview_menu_click_data = nullptr;
-
-@interface WefMenuTarget : NSObject
-+ (instancetype)shared;
-- (void)menuItemClicked:(id)sender;
-@end
-
-@implementation WefMenuTarget
-+ (instancetype)shared {
-  static WefMenuTarget* instance = nil;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    instance = [[WefMenuTarget alloc] init];
-  });
-  return instance;
-}
-
-- (void)menuItemClicked:(id)sender {
-  NSMenuItem* item = (NSMenuItem*)sender;
-  NSString* itemId = [item representedObject];
-  if (itemId && g_webview_menu_click_fn) {
-    uint32_t wid = WefIdForNSWindow([NSApp keyWindow]);
-    g_webview_menu_click_fn(g_webview_menu_click_data, wid,
-                            [itemId UTF8String]);
-  }
-}
-@end
-
-static void ParseAccelerator(const std::string& accel, NSString** outKey,
-                             NSEventModifierFlags* outMask) {
-  *outKey = @"";
-  *outMask = 0;
-
-  std::string lower = accel;
-  for (auto& c : lower)
-    c = tolower(c);
-
-  size_t pos = 0;
-  std::vector<std::string> parts;
-  std::string remaining = lower;
-  while ((pos = remaining.find('+')) != std::string::npos) {
-    parts.push_back(remaining.substr(0, pos));
-    remaining = remaining.substr(pos + 1);
-  }
-  if (!remaining.empty())
-    parts.push_back(remaining);
-
-  for (const auto& part : parts) {
-    if (part == "cmd" || part == "command" || part == "cmdorctrl" ||
-        part == "commandorcontrol") {
-      *outMask |= NSEventModifierFlagCommand;
-    } else if (part == "shift") {
-      *outMask |= NSEventModifierFlagShift;
-    } else if (part == "alt" || part == "option") {
-      *outMask |= NSEventModifierFlagOption;
-    } else if (part == "ctrl" || part == "control") {
-      *outMask |= NSEventModifierFlagControl;
-    } else {
-      *outKey = [NSString stringWithUTF8String:part.c_str()];
-    }
-  }
-}
-
-static NSMenuItem* CreateRoleMenuItem(const std::string& role) {
-  NSString* title = @"";
-  SEL action = nil;
-  NSString* keyEquiv = @"";
-  NSEventModifierFlags mask = NSEventModifierFlagCommand;
-
-  if (role == "quit") {
-    title = @"Quit";
-    action = @selector(terminate:);
-    keyEquiv = @"q";
-  } else if (role == "copy") {
-    title = @"Copy";
-    action = @selector(copy:);
-    keyEquiv = @"c";
-  } else if (role == "paste") {
-    title = @"Paste";
-    action = @selector(paste:);
-    keyEquiv = @"v";
-  } else if (role == "cut") {
-    title = @"Cut";
-    action = @selector(cut:);
-    keyEquiv = @"x";
-  } else if (role == "selectall" || role == "selectAll") {
-    title = @"Select All";
-    action = @selector(selectAll:);
-    keyEquiv = @"a";
-  } else if (role == "undo") {
-    title = @"Undo";
-    action = @selector(undo:);
-    keyEquiv = @"z";
-  } else if (role == "redo") {
-    title = @"Redo";
-    action = @selector(redo:);
-    keyEquiv = @"Z";
-    mask = NSEventModifierFlagCommand | NSEventModifierFlagShift;
-  } else if (role == "minimize") {
-    title = @"Minimize";
-    action = @selector(performMiniaturize:);
-    keyEquiv = @"m";
-  } else if (role == "zoom") {
-    title = @"Zoom";
-    action = @selector(performZoom:);
-  } else if (role == "close") {
-    title = @"Close";
-    action = @selector(performClose:);
-    keyEquiv = @"w";
-  } else if (role == "about") {
-    title = @"About";
-    action = @selector(orderFrontStandardAboutPanel:);
-  } else if (role == "hide") {
-    title = @"Hide";
-    action = @selector(hide:);
-    keyEquiv = @"h";
-  } else if (role == "hideothers" || role == "hideOthers") {
-    title = @"Hide Others";
-    action = @selector(hideOtherApplications:);
-    keyEquiv = @"h";
-    mask = NSEventModifierFlagCommand | NSEventModifierFlagOption;
-  } else if (role == "unhide") {
-    title = @"Show All";
-    action = @selector(unhideAllApplications:);
-  } else if (role == "front") {
-    title = @"Bring All to Front";
-    action = @selector(arrangeInFront:);
-  } else if (role == "togglefullscreen" || role == "toggleFullScreen") {
-    title = @"Toggle Full Screen";
-    action = @selector(toggleFullScreen:);
-    keyEquiv = @"f";
-    mask = NSEventModifierFlagCommand | NSEventModifierFlagControl;
-  } else {
-    return nil;
-  }
-
-  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:title
-                                                action:action
-                                         keyEquivalent:keyEquiv];
-  [item setKeyEquivalentModifierMask:mask];
-  return item;
-}
-
-static NSMenu* BuildMenuFromValue(wef_value_t* val,
-                                  const wef_backend_api_t* api, id target,
-                                  SEL action) {
-  if (!val || !api->value_is_list(val))
-    return nil;
-
-  NSMenu* menu = [[NSMenu alloc] init];
-  [menu setAutoenablesItems:NO];
-
-  size_t count = api->value_list_size(val);
-  for (size_t i = 0; i < count; ++i) {
-    wef_value_t* itemVal = api->value_list_get(val, i);
-    if (!itemVal || !api->value_is_dict(itemVal))
-      continue;
-
-    // Separator
-    wef_value_t* typeVal = api->value_dict_get(itemVal, "type");
-    if (typeVal && api->value_is_string(typeVal)) {
-      size_t len = 0;
-      char* typeStr = api->value_get_string(typeVal, &len);
-      if (typeStr && std::string(typeStr) == "separator") {
-        [menu addItem:[NSMenuItem separatorItem]];
-        api->value_free_string(typeStr);
-        continue;
-      }
-      if (typeStr)
-        api->value_free_string(typeStr);
-    }
-
-    // Role
-    wef_value_t* roleVal = api->value_dict_get(itemVal, "role");
-    if (roleVal && api->value_is_string(roleVal)) {
-      size_t len = 0;
-      char* roleStr = api->value_get_string(roleVal, &len);
-      if (roleStr) {
-        NSMenuItem* roleItem = CreateRoleMenuItem(roleStr);
-        if (roleItem)
-          [menu addItem:roleItem];
-        api->value_free_string(roleStr);
-        continue;
-      }
-    }
-
-    // Label
-    wef_value_t* labelVal = api->value_dict_get(itemVal, "label");
-    if (!labelVal || !api->value_is_string(labelVal))
-      continue;
-    size_t labelLen = 0;
-    char* labelStr = api->value_get_string(labelVal, &labelLen);
-    if (!labelStr)
-      continue;
-    NSString* label = [NSString stringWithUTF8String:labelStr];
-    api->value_free_string(labelStr);
-
-    // Submenu
-    wef_value_t* submenuVal = api->value_dict_get(itemVal, "submenu");
-    if (submenuVal && api->value_is_list(submenuVal)) {
-      NSMenuItem* submenuItem = [[NSMenuItem alloc] init];
-      [submenuItem setTitle:label];
-      NSMenu* submenu = BuildMenuFromValue(submenuVal, api, target, action);
-      [submenu setTitle:label];
-      [submenuItem setSubmenu:submenu];
-      [menu addItem:submenuItem];
-      continue;
-    }
-
-    // Regular clickable item
-    NSString* keyEquiv = @"";
-    NSEventModifierFlags modMask = NSEventModifierFlagCommand;
-    wef_value_t* accelVal = api->value_dict_get(itemVal, "accelerator");
-    if (accelVal && api->value_is_string(accelVal)) {
-      size_t accelLen = 0;
-      char* accelStr = api->value_get_string(accelVal, &accelLen);
-      if (accelStr) {
-        ParseAccelerator(accelStr, &keyEquiv, &modMask);
-        api->value_free_string(accelStr);
-      }
-    }
-
-    NSMenuItem* nsItem = [[NSMenuItem alloc] initWithTitle:label
-                                                    action:action
-                                             keyEquivalent:keyEquiv];
-    [nsItem setKeyEquivalentModifierMask:modMask];
-    [nsItem setTarget:target];
-
-    wef_value_t* idVal = api->value_dict_get(itemVal, "id");
-    if (idVal && api->value_is_string(idVal)) {
-      size_t idLen = 0;
-      char* idStr = api->value_get_string(idVal, &idLen);
-      if (idStr) {
-        [nsItem setRepresentedObject:[NSString stringWithUTF8String:idStr]];
-        api->value_free_string(idStr);
-      }
-    }
-
-    wef_value_t* enabledVal = api->value_dict_get(itemVal, "enabled");
-    if (enabledVal && api->value_is_bool(enabledVal)) {
-      [nsItem setEnabled:api->value_get_bool(enabledVal)];
-    } else {
-      [nsItem setEnabled:YES];
-    }
-
-    [menu addItem:nsItem];
-  }
-
-  return menu;
-}
 
 void WKWebViewBackend::SetApplicationMenu(uint32_t window_id,
                                           wef_value_t* menu_template,
                                           const wef_backend_api_t* api,
                                           wef_menu_click_fn on_click,
                                           void* on_click_data) {
-  g_webview_menu_click_fn = on_click;
-  g_webview_menu_click_data = on_click_data;
-
   dispatch_async(dispatch_get_main_queue(), ^{
-    NSMenu* menubar =
-        BuildMenuFromValue(menu_template, api, [WefMenuTarget shared],
-                           @selector(menuItemClicked:));
+    NSMenu* menubar = wef_common::BuildNSMenuFromValue(
+        menu_template, api, on_click, on_click_data, window_id);
     if (menubar) {
       EnsureEditMenu(menubar);
       // Store the menu for this window
@@ -1731,13 +1246,9 @@ void WKWebViewBackend::ShowContextMenu(uint32_t window_id, int x, int y,
                                        const wef_backend_api_t* api,
                                        wef_menu_click_fn on_click,
                                        void* on_click_data) {
-  g_webview_menu_click_fn = on_click;
-  g_webview_menu_click_data = on_click_data;
-
   dispatch_async(dispatch_get_main_queue(), ^{
-    NSMenu* menu =
-        BuildMenuFromValue(menu_template, api, [WefMenuTarget shared],
-                           @selector(menuItemClicked:));
+    NSMenu* menu = wef_common::BuildNSMenuFromValue(
+        menu_template, api, on_click, on_click_data, window_id);
     if (!menu)
       return;
 
@@ -1782,112 +1293,23 @@ int WKWebViewBackend::ShowDialog(uint32_t /*window_id*/, int dialog_type,
                                  const std::string& message,
                                  const std::string& default_value,
                                  char** out_input_value) {
-  if (out_input_value)
-    *out_input_value = nullptr;
-
-  NSString* nsTitle = [NSString stringWithUTF8String:title.c_str()];
-  NSString* nsMessage = [NSString stringWithUTF8String:message.c_str()];
-  NSString* nsDefault = [NSString stringWithUTF8String:default_value.c_str()];
-
-  // The block runs the modal — `runModal` itself spins NSRunLoop, so other
-  // WEF windows / dispatch queues continue to drain while it's up. Done as
-  // dispatch_sync so callers off the main thread are forwarded to it (the
-  // typical Deno-runtime caller is *already* on main, in which case
-  // dispatch_sync executes the block immediately on this thread).
-  __block bool confirmed = false;
-  __block char* input_strdup = nullptr;
-  void (^body)(void) = ^{
-    NSAlert* alert = [[NSAlert alloc] init];
-    [alert setMessageText:nsTitle];
-    [alert setInformativeText:nsMessage];
-
-    NSTextField* inputField = nil;
-
-    if (dialog_type == WEF_DIALOG_ALERT) {
-      [alert addButtonWithTitle:@"OK"];
-    } else if (dialog_type == WEF_DIALOG_CONFIRM) {
-      [alert addButtonWithTitle:@"OK"];
-      [alert addButtonWithTitle:@"Cancel"];
-    } else if (dialog_type == WEF_DIALOG_PROMPT) {
-      [alert addButtonWithTitle:@"OK"];
-      [alert addButtonWithTitle:@"Cancel"];
-      inputField =
-          [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 300, 24)];
-      [inputField setStringValue:nsDefault];
-      [alert setAccessoryView:inputField];
-      [alert layout];
-      [[alert window] makeFirstResponder:inputField];
-    }
-
-    NSModalResponse response = [alert runModal];
-    confirmed = (response == NSAlertFirstButtonReturn);
-    if (dialog_type == WEF_DIALOG_PROMPT && confirmed && inputField &&
-        out_input_value) {
-      const char* text = [[inputField stringValue] UTF8String];
-      if (text)
-        input_strdup = strdup(text);
-    }
-  };
-  if ([NSThread isMainThread]) {
-    body();
-  } else {
-    dispatch_sync(dispatch_get_main_queue(), body);
-  }
-  if (out_input_value)
-    *out_input_value = input_strdup;
-  return confirmed ? 1 : 0;
+  return wef_common::ShowDialogMac(dialog_type, title, message, default_value,
+                                   out_input_value);
 }
 
 // --- Dock (macOS) ---
 
 // Consumed by AppDelegate in main_mac.mm (declared extern there).
 NSMenu* g_wv_dock_menu = nil;
-static wef_menu_click_fn g_wv_dock_click_fn = nullptr;
-static void* g_wv_dock_click_data = nullptr;
 wef_dock_reopen_fn g_wv_dock_reopen_fn = nullptr;
 void* g_wv_dock_reopen_data = nullptr;
 
-@interface WefDockMenuTarget : NSObject
-+ (instancetype)shared;
-- (void)dockMenuItemClicked:(id)sender;
-@end
-
-@implementation WefDockMenuTarget
-+ (instancetype)shared {
-  static WefDockMenuTarget* instance = nil;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    instance = [[WefDockMenuTarget alloc] init];
-  });
-  return instance;
-}
-
-- (void)dockMenuItemClicked:(id)sender {
-  NSMenuItem* item = (NSMenuItem*)sender;
-  NSString* itemId = [item representedObject];
-  if (itemId && g_wv_dock_click_fn) {
-    // window_id = 0 because the dock menu is app-scoped.
-    g_wv_dock_click_fn(g_wv_dock_click_data, 0, [itemId UTF8String]);
-  }
-}
-@end
-
 void WKWebViewBackend::SetDockBadge(const char* badge_or_null) {
-  NSString* ns = badge_or_null && *badge_or_null
-                     ? [NSString stringWithUTF8String:badge_or_null]
-                     : nil;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [[NSApp dockTile] setBadgeLabel:ns];
-  });
+  wef_common::SetDockBadgeMac(badge_or_null);
 }
 
 void WKWebViewBackend::BounceDock(int type) {
-  NSRequestUserAttentionType t = (type == WEF_DOCK_BOUNCE_CRITICAL)
-                                     ? NSCriticalRequest
-                                     : NSInformationalRequest;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [NSApp requestUserAttention:t];
-  });
+  wef_common::BounceDockMac(type);
 }
 
 void WKWebViewBackend::SetDockMenu(wef_value_t* menu_template,
@@ -1897,28 +1319,19 @@ void WKWebViewBackend::SetDockMenu(wef_value_t* menu_template,
   if (!menu_template) {
     dispatch_async(dispatch_get_main_queue(), ^{
       g_wv_dock_menu = nil;
-      g_wv_dock_click_fn = nullptr;
-      g_wv_dock_click_data = nullptr;
     });
     return;
   }
-  g_wv_dock_click_fn = on_click;
-  g_wv_dock_click_data = on_click_data;
   dispatch_async(dispatch_get_main_queue(), ^{
-    NSMenu* menu =
-        BuildMenuFromValue(menu_template, api, [WefDockMenuTarget shared],
-                           @selector(dockMenuItemClicked:));
+    // window_id = 0 because the dock menu is app-scoped.
+    NSMenu* menu = wef_common::BuildNSMenuFromValue(menu_template, api,
+                                                     on_click, on_click_data, 0);
     g_wv_dock_menu = menu;
   });
 }
 
 void WKWebViewBackend::SetDockVisible(bool visible) {
-  NSApplicationActivationPolicy policy =
-      visible ? NSApplicationActivationPolicyRegular
-              : NSApplicationActivationPolicyAccessory;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [NSApp setActivationPolicy:policy];
-  });
+  wef_common::SetDockVisibleMac(visible);
 }
 
 void WKWebViewBackend::SetDockReopenHandler(wef_dock_reopen_fn handler,
@@ -1928,569 +1341,68 @@ void WKWebViewBackend::SetDockReopenHandler(wef_dock_reopen_fn handler,
 }
 
 // --- Tray / status-bar icon (macOS) ---
-
-namespace {
-struct WvTrayEntry {
-  NSStatusItem* item;
-  NSMenu* menu;
-  wef_menu_click_fn menu_click_fn;
-  void* menu_click_data;
-  wef_tray_click_fn click_fn;
-  void* click_data;
-  wef_tray_click_fn dblclick_fn;
-  void* dblclick_data;
-  NSImage* light_image;
-  NSImage* dark_image;
-};
-std::map<uint32_t, WvTrayEntry>& WvTrayMap() {
-  static std::map<uint32_t, WvTrayEntry> m;
-  return m;
-}
-std::atomic<uint32_t> g_wv_next_tray_id{1};
-
-bool WvSystemIsDarkMode() {
-  if (@available(macOS 10.14, *)) {
-    NSAppearance* appearance = [NSApp effectiveAppearance];
-    NSAppearanceName match = [appearance bestMatchFromAppearancesWithNames:@[
-      NSAppearanceNameAqua, NSAppearanceNameDarkAqua
-    ]];
-    return [match isEqualToString:NSAppearanceNameDarkAqua];
-  }
-  return false;
-}
-
-NSImage* WvImageFromPng(const void* bytes, size_t len) {
-  if (!bytes || len == 0)
-    return nil;
-  NSData* data = [NSData dataWithBytes:bytes length:len];
-  NSImage* image = [[NSImage alloc] initWithData:data];
-  if (!image)
-    return nil;
-  [image setSize:NSMakeSize(18, 18)];
-  [image setTemplate:YES];
-  return image;
-}
-
-void WvApplyActiveIcon(WvTrayEntry& entry) {
-  if (!entry.item)
-    return;
-  bool dark = WvSystemIsDarkMode();
-  NSImage* chosen =
-      (dark && entry.dark_image) ? entry.dark_image : entry.light_image;
-  if (chosen)
-    [[entry.item button] setImage:chosen];
-}
-
-void WvEnsureAppearanceObserver() {
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    [[NSDistributedNotificationCenter defaultCenter]
-        addObserverForName:@"AppleInterfaceThemeChangedNotification"
-                    object:nil
-                     queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification* /*n*/) {
-                  for (auto& [tid, entry] : WvTrayMap()) {
-                    WvApplyActiveIcon(entry);
-                  }
-                }];
-  });
-}
-}  // namespace
-
-@interface WefWvTrayTarget : NSObject
-+ (instancetype)shared;
-- (void)trayClicked:(id)sender;
-- (void)trayMenuItemClicked:(id)sender;
-@end
-
-@implementation WefWvTrayTarget
-+ (instancetype)shared {
-  static WefWvTrayTarget* instance = nil;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    instance = [[WefWvTrayTarget alloc] init];
-  });
-  return instance;
-}
-
-- (void)trayClicked:(id)sender {
-  NSStatusBarButton* button = (NSStatusBarButton*)sender;
-  NSNumber* tagObj = [[button cell] representedObject];
-  if (!tagObj)
-    return;
-  uint32_t tray_id = (uint32_t)[tagObj unsignedIntValue];
-  auto& map = WvTrayMap();
-  auto it = map.find(tray_id);
-  if (it == map.end())
-    return;
-  NSEvent* event = [NSApp currentEvent];
-  if (event && event.type == NSEventTypeRightMouseUp && it->second.menu) {
-    [it->second.item popUpStatusItemMenu:it->second.menu];
-    return;
-  }
-  if (event && event.clickCount >= 2 && it->second.dblclick_fn) {
-    it->second.dblclick_fn(it->second.dblclick_data, tray_id);
-    return;
-  }
-  if (it->second.click_fn)
-    it->second.click_fn(it->second.click_data, tray_id);
-}
-
-- (void)trayMenuItemClicked:(id)sender {
-  NSMenuItem* item = (NSMenuItem*)sender;
-  NSArray* pair = [item representedObject];
-  if (!pair || [pair count] != 2)
-    return;
-  uint32_t tray_id = (uint32_t)[(NSNumber*)pair[0] unsignedIntValue];
-  NSString* itemId = pair[1];
-  auto& map = WvTrayMap();
-  auto it = map.find(tray_id);
-  if (it == map.end() || !it->second.menu_click_fn)
-    return;
-  it->second.menu_click_fn(it->second.menu_click_data, tray_id,
-                           [itemId UTF8String]);
-}
-@end
-
-static void TagWvTrayMenuItems(NSMenu* menu, uint32_t tray_id) {
-  for (NSMenuItem* mi in [menu itemArray]) {
-    if ([mi hasSubmenu]) {
-      TagWvTrayMenuItems([mi submenu], tray_id);
-      continue;
-    }
-    if ([mi isSeparatorItem])
-      continue;
-    id rep = [mi representedObject];
-    if (![rep isKindOfClass:[NSString class]])
-      continue;
-    NSArray* pair =
-        @[ [NSNumber numberWithUnsignedInt:tray_id], (NSString*)rep ];
-    [mi setRepresentedObject:pair];
-    [mi setTarget:[WefWvTrayTarget shared]];
-    [mi setAction:@selector(trayMenuItemClicked:)];
-  }
-}
+//
+// Thin trampolines over backend-common/src/tray_mac.mm.
 
 uint32_t WKWebViewBackend::CreateTrayIcon() {
-  uint32_t tray_id = g_wv_next_tray_id.fetch_add(1, std::memory_order_relaxed);
-  dispatch_async(dispatch_get_main_queue(), ^{
-    NSStatusItem* item = [[NSStatusBar systemStatusBar]
-        statusItemWithLength:NSSquareStatusItemLength];
-    if (!item)
-      return;
-    NSStatusBarButton* button = [item button];
-    if (button) {
-      [[button cell] setRepresentedObject:@(tray_id)];
-      [button setTarget:[WefWvTrayTarget shared]];
-      [button setAction:@selector(trayClicked:)];
-      [button sendActionOn:NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp];
-    }
-    WvTrayEntry entry = {};
-    entry.item = item;
-    WvTrayMap()[tray_id] = entry;
-  });
-  return tray_id;
+  return wef_common::CreateTrayIconMac();
 }
 
 void WKWebViewBackend::DestroyTrayIcon(uint32_t tray_id) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = WvTrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end())
-      return;
-    if (it->second.item)
-      [[NSStatusBar systemStatusBar] removeStatusItem:it->second.item];
-    map.erase(it);
-  });
+  wef_common::DestroyTrayIconMac(tray_id);
 }
 
 void WKWebViewBackend::SetTrayIcon(uint32_t tray_id, const void* png_bytes,
                                    size_t len) {
-  if (!png_bytes || len == 0)
-    return;
-  NSData* data = [NSData dataWithBytes:png_bytes length:len];
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = WvTrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end() || !it->second.item)
-      return;
-    NSImage* image = WvImageFromPng([data bytes], [data length]);
-    if (!image)
-      return;
-    it->second.light_image = image;
-    WvEnsureAppearanceObserver();
-    WvApplyActiveIcon(it->second);
-  });
+  wef_common::SetTrayIconMac(tray_id, png_bytes, len);
 }
 
-void WKWebViewBackend::SetTrayIconDark(uint32_t tray_id, const void* png_bytes,
-                                       size_t len) {
-  NSData* data = (png_bytes && len > 0)
-                     ? [NSData dataWithBytes:png_bytes length:len]
-                     : nil;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = WvTrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end() || !it->second.item)
-      return;
-    it->second.dark_image =
-        data ? WvImageFromPng([data bytes], [data length]) : nil;
-    WvEnsureAppearanceObserver();
-    WvApplyActiveIcon(it->second);
-  });
+void WKWebViewBackend::SetTrayIconDark(uint32_t tray_id,
+                                       const void* png_bytes, size_t len) {
+  wef_common::SetTrayIconDarkMac(tray_id, png_bytes, len);
 }
 
 void WKWebViewBackend::SetTrayDoubleClickHandler(uint32_t tray_id,
                                                  wef_tray_click_fn handler,
                                                  void* user_data) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = WvTrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end())
-      return;
-    it->second.dblclick_fn = handler;
-    it->second.dblclick_data = user_data;
-  });
+  wef_common::SetTrayDoubleClickHandlerMac(tray_id, handler, user_data);
 }
 
 void WKWebViewBackend::SetTrayTooltip(uint32_t tray_id,
                                       const char* tooltip_or_null) {
-  NSString* tip = (tooltip_or_null && *tooltip_or_null)
-                      ? [NSString stringWithUTF8String:tooltip_or_null]
-                      : nil;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = WvTrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end() || !it->second.item)
-      return;
-    [[it->second.item button] setToolTip:tip];
-  });
+  wef_common::SetTrayTooltipMac(tray_id, tooltip_or_null);
 }
 
 void WKWebViewBackend::SetTrayMenu(uint32_t tray_id, wef_value_t* menu_template,
                                    const wef_backend_api_t* api,
                                    wef_menu_click_fn on_click,
                                    void* on_click_data) {
-  if (!menu_template) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      auto& map = WvTrayMap();
-      auto it = map.find(tray_id);
-      if (it == map.end())
-        return;
-      it->second.menu = nil;
-      it->second.menu_click_fn = nullptr;
-      it->second.menu_click_data = nullptr;
-    });
-    return;
-  }
-  dispatch_async(dispatch_get_main_queue(), ^{
-    NSMenu* menu =
-        BuildMenuFromValue(menu_template, api, [WefWvTrayTarget shared],
-                           @selector(trayMenuItemClicked:));
-    if (!menu)
-      return;
-    TagWvTrayMenuItems(menu, tray_id);
-    auto& map = WvTrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end())
-      return;
-    it->second.menu = menu;
-    it->second.menu_click_fn = on_click;
-    it->second.menu_click_data = on_click_data;
-  });
+  wef_common::SetTrayMenuMac(tray_id, menu_template, api, on_click,
+                              on_click_data);
 }
 
 void WKWebViewBackend::SetTrayClickHandler(uint32_t tray_id,
                                            wef_tray_click_fn handler,
                                            void* user_data) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = WvTrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end())
-      return;
-    it->second.click_fn = handler;
-    it->second.click_data = user_data;
-  });
+  wef_common::SetTrayClickHandlerMac(tray_id, handler, user_data);
 }
-
 // --- Notifications (macOS WebView) ---
 //
-// Same approach as the CEF macOS backend: NSUserNotification (deprecated
-// in macOS 11 but functional in 15; chosen over UNUserNotificationCenter
-// to avoid the framework's bundle-id / entitlement / runtime-auth dance).
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-
-namespace {
-
-struct WvMacNotifEntry {
-  NSUserNotification* notif;
-  NSString* tag;
-  wef_notification_event_fn on_event;
-  void* user_data;
-  std::vector<std::string> action_ids;
-};
-
-std::map<uint32_t, WvMacNotifEntry>& WvMacNotifMap() {
-  static std::map<uint32_t, WvMacNotifEntry> map;
-  return map;
-}
-std::map<void*, uint32_t>& WvNSNotifToId() {
-  static std::map<void*, uint32_t> map;
-  return map;
-}
-std::atomic<uint32_t> g_wv_next_notif_id{1};
-
-}  // namespace
-
-@interface WefWvNotifDelegate : NSObject <NSUserNotificationCenterDelegate>
-+ (instancetype)shared;
-@end
-
-@implementation WefWvNotifDelegate
-+ (instancetype)shared {
-  static WefWvNotifDelegate* instance = nil;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    instance = [[WefWvNotifDelegate alloc] init];
-  });
-  return instance;
-}
-- (BOOL)userNotificationCenter:(NSUserNotificationCenter*)center
-     shouldPresentNotification:(NSUserNotification*)notification {
-  (void)center;
-  (void)notification;
-  return YES;
-}
-- (void)userNotificationCenter:(NSUserNotificationCenter*)center
-        didDeliverNotification:(NSUserNotification*)notification {
-  (void)center;
-  auto& m = WvNSNotifToId();
-  auto it = m.find((__bridge void*)notification);
-  if (it == m.end())
-    return;
-  uint32_t nid = it->second;
-  auto& nm = WvMacNotifMap();
-  auto nit = nm.find(nid);
-  if (nit != nm.end() && nit->second.on_event) {
-    nit->second.on_event(nit->second.user_data, nid, WEF_NOTIFICATION_SHOWN,
-                         nullptr);
-  }
-}
-- (void)userNotificationCenter:(NSUserNotificationCenter*)center
-       didActivateNotification:(NSUserNotification*)notification {
-  (void)center;
-  auto& m = WvNSNotifToId();
-  auto it = m.find((__bridge void*)notification);
-  if (it == m.end())
-    return;
-  uint32_t nid = it->second;
-  auto& nm = WvMacNotifMap();
-  auto nit = nm.find(nid);
-  if (nit == nm.end() || !nit->second.on_event)
-    return;
-  switch (notification.activationType) {
-    case NSUserNotificationActivationTypeContentsClicked:
-      nit->second.on_event(nit->second.user_data, nid,
-                           WEF_NOTIFICATION_CLICKED, nullptr);
-      break;
-    case NSUserNotificationActivationTypeActionButtonClicked: {
-      const char* aid = nullptr;
-      std::string aid_storage;
-      if (!nit->second.action_ids.empty()) {
-        aid_storage = nit->second.action_ids[0];
-        aid = aid_storage.c_str();
-      }
-      nit->second.on_event(nit->second.user_data, nid,
-                           WEF_NOTIFICATION_ACTION, aid);
-      break;
-    }
-    case NSUserNotificationActivationTypeAdditionalActionClicked: {
-      NSUserNotificationAction* action =
-          notification.additionalActivationAction;
-      if (action && action.identifier) {
-        std::string aid = [action.identifier UTF8String];
-        nit->second.on_event(nit->second.user_data, nid,
-                             WEF_NOTIFICATION_ACTION, aid.c_str());
-      }
-      break;
-    }
-    default:
-      break;
-  }
-}
-@end
-
-static void EnsureWvNotifDelegate() {
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    [[NSUserNotificationCenter defaultUserNotificationCenter]
-        setDelegate:[WefWvNotifDelegate shared]];
-  });
-}
+// Thin trampolines over backend-common/src/notifications_mac.mm
+// (UNUserNotificationCenter-backed). Migrated from NSUserNotification
+// (deprecated in macOS 11) to align with the CEF backend.
 
 uint32_t WKWebViewBackend::ShowNotification(
     wef_value_t* options, const wef_backend_api_t* api,
     wef_notification_event_fn on_event, void* user_data) {
-  if (!options)
-    return 0;
-  if (!api->value_is_dict(options)) {
-    api->value_free(options);
-    return 0;
-  }
-
-  auto get_string = [&](const char* key) -> std::string {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_string(v))
-      return std::string();
-    size_t len = 0;
-    char* s = api->value_get_string(v, &len);
-    if (!s)
-      return std::string();
-    std::string out(s, len);
-    api->value_free_string(s);
-    return out;
-  };
-  auto get_bool = [&](const char* key, bool dfl) -> bool {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_bool(v))
-      return dfl;
-    return api->value_get_bool(v);
-  };
-
-  std::string title = get_string("title");
-  std::string body = get_string("body");
-  std::string tag = get_string("tag");
-  bool silent = get_bool("silent", false);
-
-  std::vector<std::pair<std::string, std::string>> actions;
-  wef_value_t* actions_val = api->value_dict_get(options, "actions");
-  if (actions_val && api->value_is_list(actions_val)) {
-    size_t n = api->value_list_size(actions_val);
-    for (size_t i = 0; i < n; ++i) {
-      wef_value_t* a = api->value_list_get(actions_val, i);
-      if (!a || !api->value_is_dict(a))
-        continue;
-      auto aid = [&]() -> std::string {
-        wef_value_t* v = api->value_dict_get(a, "id");
-        if (!v || !api->value_is_string(v))
-          return std::string();
-        size_t len = 0;
-        char* s = api->value_get_string(v, &len);
-        if (!s)
-          return std::string();
-        std::string out(s, len);
-        api->value_free_string(s);
-        return out;
-      }();
-      auto atitle = [&]() -> std::string {
-        wef_value_t* v = api->value_dict_get(a, "title");
-        if (!v || !api->value_is_string(v))
-          return std::string();
-        size_t len = 0;
-        char* s = api->value_get_string(v, &len);
-        if (!s)
-          return std::string();
-        std::string out(s, len);
-        api->value_free_string(s);
-        return out;
-      }();
-      if (!aid.empty() && !atitle.empty())
-        actions.emplace_back(aid, atitle);
-    }
-  }
-  api->value_free(options);
-
-  uint32_t nid = g_wv_next_notif_id.fetch_add(1, std::memory_order_relaxed);
-
-  NSString* nsTitle = [NSString stringWithUTF8String:title.c_str()];
-  NSString* nsBody = [NSString stringWithUTF8String:body.c_str()];
-  NSString* nsTag = tag.empty() ? nil : [NSString stringWithUTF8String:tag.c_str()];
-
-  std::vector<std::string> action_ids;
-  std::vector<std::string> action_titles;
-  action_ids.reserve(actions.size());
-  action_titles.reserve(actions.size());
-  for (auto& a : actions) {
-    action_ids.push_back(a.first);
-    action_titles.push_back(a.second);
-  }
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    EnsureWvNotifDelegate();
-    NSUserNotificationCenter* center =
-        [NSUserNotificationCenter defaultUserNotificationCenter];
-    if (nsTag) {
-      NSArray<NSUserNotification*>* delivered = [center deliveredNotifications];
-      for (NSUserNotification* d in delivered) {
-        if (d.identifier && [d.identifier isEqualToString:nsTag])
-          [center removeDeliveredNotification:d];
-      }
-    }
-
-    NSUserNotification* notif = [[NSUserNotification alloc] init];
-    notif.title = nsTitle;
-    notif.informativeText = nsBody;
-    if (nsTag)
-      notif.identifier = nsTag;
-    notif.soundName = silent ? nil : NSUserNotificationDefaultSoundName;
-
-    if (!action_ids.empty()) {
-      notif.hasActionButton = YES;
-      notif.actionButtonTitle =
-          [NSString stringWithUTF8String:action_titles[0].c_str()];
-      if (action_ids.size() > 1) {
-        NSMutableArray<NSUserNotificationAction*>* extras =
-            [NSMutableArray array];
-        for (size_t i = 1; i < action_ids.size(); ++i) {
-          NSUserNotificationAction* act = [NSUserNotificationAction
-              actionWithIdentifier:[NSString stringWithUTF8String:action_ids[i]
-                                                                  .c_str()]
-                             title:[NSString stringWithUTF8String:action_titles[i]
-                                                                  .c_str()]];
-          [extras addObject:act];
-        }
-        notif.additionalActions = extras;
-      }
-    }
-
-    WvMacNotifEntry e = {};
-    e.notif = notif;
-    e.tag = nsTag;
-    e.on_event = on_event;
-    e.user_data = user_data;
-    e.action_ids = action_ids;
-    WvMacNotifMap()[nid] = e;
-    WvNSNotifToId()[(__bridge void*)notif] = nid;
-
-    [center deliverNotification:notif];
-  });
-
-  return nid;
+  wef_common::NotificationOptions opts =
+      wef_common::ParseNotificationOptions(options, api);
+  return wef_common::ShowNotificationMac(opts, on_event, user_data);
 }
 
 void WKWebViewBackend::CloseNotification(uint32_t notification_id) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& nm = WvMacNotifMap();
-    auto it = nm.find(notification_id);
-    if (it == nm.end())
-      return;
-    NSUserNotification* notif = it->second.notif;
-    wef_notification_event_fn cb = it->second.on_event;
-    void* ud = it->second.user_data;
-    if (notif) {
-      NSUserNotificationCenter* center =
-          [NSUserNotificationCenter defaultUserNotificationCenter];
-      [center removeDeliveredNotification:notif];
-      WvNSNotifToId().erase((__bridge void*)notif);
-    }
-    nm.erase(it);
-    if (cb)
-      cb(ud, notification_id, WEF_NOTIFICATION_CLOSED, nullptr);
-  });
+  wef_common::CloseNotificationMac(notification_id);
 }
-
-#pragma clang diagnostic pop
 
 // --- Permissions (UNUserNotificationCenter) ---
 //
@@ -2502,82 +1414,18 @@ void WKWebViewBackend::CloseNotification(uint32_t notification_id) {
 // targets the *process*, not the WKWebView — runtime-initiated
 // notifications are app-scoped, not page-scoped.
 
-static int MapUNStatusWv(UNAuthorizationStatus s) {
-  switch (s) {
-    case UNAuthorizationStatusNotDetermined:
-      return WEF_PERMISSION_STATUS_PROMPT;
-    case UNAuthorizationStatusDenied:
-      return WEF_PERMISSION_STATUS_DENIED;
-    case UNAuthorizationStatusAuthorized:
-    case UNAuthorizationStatusProvisional:
-      return WEF_PERMISSION_STATUS_GRANTED;
-    default:
-      return WEF_PERMISSION_STATUS_UNSUPPORTED;
-  }
-}
-
-static bool WvProcessIsBundled() {
-  NSBundle* mb = [NSBundle mainBundle];
-  if (!mb || ![mb bundleIdentifier])
-    return false;
-  NSString* path = [mb bundlePath];
-  return path && [path hasSuffix:@".app"];
-}
-
-static void FirePermOnMainWv(wef_permission_callback_fn cb, void* ud,
-                             int status) {
-  if (!cb)
-    return;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    cb(ud, status);
-  });
-}
+// Permissions: thin trampolines over backend-common/src/permissions_mac.mm.
 
 void WKWebViewBackend::QueryPermission(int kind,
                                        wef_permission_callback_fn cb,
                                        void* user_data) {
-  if (kind != WEF_PERMISSION_NOTIFICATIONS || !WvProcessIsBundled()) {
-    FirePermOnMainWv(cb, user_data, WEF_PERMISSION_STATUS_UNSUPPORTED);
-    return;
-  }
-  UNUserNotificationCenter* center =
-      [UNUserNotificationCenter currentNotificationCenter];
-  [center getNotificationSettingsWithCompletionHandler:^(
-              UNNotificationSettings* settings) {
-    FirePermOnMainWv(cb, user_data, MapUNStatusWv(settings.authorizationStatus));
-  }];
+  wef_common::QueryPermissionMac(kind, cb, user_data);
 }
 
 void WKWebViewBackend::RequestPermission(int kind,
                                          wef_permission_callback_fn cb,
                                          void* user_data) {
-  if (kind != WEF_PERMISSION_NOTIFICATIONS || !WvProcessIsBundled()) {
-    FirePermOnMainWv(cb, user_data, WEF_PERMISSION_STATUS_UNSUPPORTED);
-    return;
-  }
-  UNUserNotificationCenter* center =
-      [UNUserNotificationCenter currentNotificationCenter];
-  UNAuthorizationOptions opts = UNAuthorizationOptionAlert |
-                                 UNAuthorizationOptionSound |
-                                 UNAuthorizationOptionBadge;
-  [center requestAuthorizationWithOptions:opts
-                        completionHandler:^(BOOL granted, NSError* error) {
-                          (void)error;
-                          [center getNotificationSettingsWithCompletionHandler:^(
-                                      UNNotificationSettings* settings) {
-                            int status;
-                            if (granted) {
-                              status = MapUNStatusWv(settings.authorizationStatus);
-                            } else {
-                              status = (settings.authorizationStatus ==
-                                        UNAuthorizationStatusNotDetermined)
-                                           ? WEF_PERMISSION_STATUS_DENIED
-                                           : MapUNStatusWv(
-                                                 settings.authorizationStatus);
-                            }
-                            FirePermOnMainWv(cb, user_data, status);
-                          }];
-                        }];
+  wef_common::RequestPermissionMac(kind, cb, user_data);
 }
 
 WefBackend* CreateWefBackend() {

@@ -1,6 +1,7 @@
 // Copyright 2025 Divy Srivastava. All rights reserved. MIT license.
 
 #include "runtime_loader.h"
+#include "wef_backend_common.h"
 #include "wef_json.h"
 #include <win32_menu.h>
 
@@ -30,207 +31,22 @@ using namespace Microsoft::WRL;
 
 namespace keyboard {
 
-std::string VirtualKeyToKey(WPARAM vk, LPARAM lParam) {
-  switch (vk) {
-    case VK_BACK:
-      return "Backspace";
-    case VK_TAB:
-      return "Tab";
-    case VK_RETURN:
-      return "Enter";
-    case VK_SHIFT:
-      return "Shift";
-    case VK_CONTROL:
-      return "Control";
-    case VK_MENU:
-      return "Alt";
-    case VK_PAUSE:
-      return "Pause";
-    case VK_CAPITAL:
-      return "CapsLock";
-    case VK_ESCAPE:
-      return "Escape";
-    case VK_SPACE:
-      return " ";
-    case VK_PRIOR:
-      return "PageUp";
-    case VK_NEXT:
-      return "PageDown";
-    case VK_END:
-      return "End";
-    case VK_HOME:
-      return "Home";
-    case VK_LEFT:
-      return "ArrowLeft";
-    case VK_UP:
-      return "ArrowUp";
-    case VK_RIGHT:
-      return "ArrowRight";
-    case VK_DOWN:
-      return "ArrowDown";
-    case VK_INSERT:
-      return "Insert";
-    case VK_DELETE:
-      return "Delete";
-    case VK_LWIN:
-    case VK_RWIN:
-      return "Meta";
-    case VK_F1:
-      return "F1";
-    case VK_F2:
-      return "F2";
-    case VK_F3:
-      return "F3";
-    case VK_F4:
-      return "F4";
-    case VK_F5:
-      return "F5";
-    case VK_F6:
-      return "F6";
-    case VK_F7:
-      return "F7";
-    case VK_F8:
-      return "F8";
-    case VK_F9:
-      return "F9";
-    case VK_F10:
-      return "F10";
-    case VK_F11:
-      return "F11";
-    case VK_F12:
-      return "F12";
-    case VK_NUMLOCK:
-      return "NumLock";
-    case VK_SCROLL:
-      return "ScrollLock";
-    default:
-      if (vk >= 'A' && vk <= 'Z') {
-        bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-        bool caps = (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
-        char c = static_cast<char>(vk);
-        if (!(shift ^ caps))
-          c += 32;  // lowercase
-        return std::string(1, c);
-      }
-      if (vk >= '0' && vk <= '9') {
-        return std::string(1, static_cast<char>(vk));
-      }
-      return "Unidentified";
-  }
+// VK → W3C key/code mapping lives in backend-common
+// (wef_common::VkToKey / VkToCode). These thin wrappers extract
+// the Windows-only state (GetKeyState / lParam scancode) and forward.
+inline std::string VirtualKeyToKey(WPARAM vk, LPARAM /*lParam*/) {
+  bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+  bool caps = (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
+  return wef_common::VkToKey(static_cast<int>(vk), 0, shift, caps);
 }
 
-std::string VirtualKeyToCode(WPARAM vk, LPARAM lParam) {
-  bool isExtended = (lParam & (1 << 24)) != 0;
-  switch (vk) {
-    case VK_BACK:
-      return "Backspace";
-    case VK_TAB:
-      return "Tab";
-    case VK_RETURN:
-      return isExtended ? "NumpadEnter" : "Enter";
-    case VK_SHIFT:
-      return (MapVirtualKey((lParam >> 16) & 0xFF, MAPVK_VSC_TO_VK_EX) ==
-              VK_RSHIFT)
-                 ? "ShiftRight"
-                 : "ShiftLeft";
-    case VK_CONTROL:
-      return isExtended ? "ControlRight" : "ControlLeft";
-    case VK_MENU:
-      return isExtended ? "AltRight" : "AltLeft";
-    case VK_PAUSE:
-      return "Pause";
-    case VK_CAPITAL:
-      return "CapsLock";
-    case VK_ESCAPE:
-      return "Escape";
-    case VK_SPACE:
-      return "Space";
-    case VK_PRIOR:
-      return "PageUp";
-    case VK_NEXT:
-      return "PageDown";
-    case VK_END:
-      return "End";
-    case VK_HOME:
-      return "Home";
-    case VK_LEFT:
-      return "ArrowLeft";
-    case VK_UP:
-      return "ArrowUp";
-    case VK_RIGHT:
-      return "ArrowRight";
-    case VK_DOWN:
-      return "ArrowDown";
-    case VK_INSERT:
-      return "Insert";
-    case VK_DELETE:
-      return "Delete";
-    case VK_LWIN:
-      return "MetaLeft";
-    case VK_RWIN:
-      return "MetaRight";
-    case VK_F1:
-      return "F1";
-    case VK_F2:
-      return "F2";
-    case VK_F3:
-      return "F3";
-    case VK_F4:
-      return "F4";
-    case VK_F5:
-      return "F5";
-    case VK_F6:
-      return "F6";
-    case VK_F7:
-      return "F7";
-    case VK_F8:
-      return "F8";
-    case VK_F9:
-      return "F9";
-    case VK_F10:
-      return "F10";
-    case VK_F11:
-      return "F11";
-    case VK_F12:
-      return "F12";
-    case VK_NUMLOCK:
-      return "NumLock";
-    case VK_SCROLL:
-      return "ScrollLock";
-    case VK_OEM_1:
-      return "Semicolon";
-    case VK_OEM_PLUS:
-      return "Equal";
-    case VK_OEM_COMMA:
-      return "Comma";
-    case VK_OEM_MINUS:
-      return "Minus";
-    case VK_OEM_PERIOD:
-      return "Period";
-    case VK_OEM_2:
-      return "Slash";
-    case VK_OEM_3:
-      return "Backquote";
-    case VK_OEM_4:
-      return "BracketLeft";
-    case VK_OEM_5:
-      return "Backslash";
-    case VK_OEM_6:
-      return "BracketRight";
-    case VK_OEM_7:
-      return "Quote";
-    default:
-      if (vk >= 'A' && vk <= 'Z') {
-        return "Key" + std::string(1, static_cast<char>(vk));
-      }
-      if (vk >= '0' && vk <= '9') {
-        return "Digit" + std::string(1, static_cast<char>(vk));
-      }
-      return "Unidentified";
-  }
+inline std::string VirtualKeyToCode(WPARAM vk, LPARAM lParam) {
+  bool is_extended = (lParam & (1 << 24)) != 0;
+  uint32_t scancode = static_cast<uint32_t>((lParam >> 16) & 0xFF);
+  return wef_common::VkToCode(static_cast<int>(vk), is_extended, scancode);
 }
 
-uint32_t GetWefModifiers() {
+inline uint32_t GetWefModifiers() {
   uint32_t modifiers = 0;
   if (GetKeyState(VK_SHIFT) & 0x8000)
     modifiers |= WEF_MOD_SHIFT;
@@ -485,14 +301,11 @@ class WebView2Backend : public WefBackend {
   // Shell_NotifyIcon balloons have no permission model — always granted.
   void QueryPermission(int kind, wef_permission_callback_fn cb,
                        void* user_data) override {
-    if (cb)
-      cb(user_data, kind == WEF_PERMISSION_NOTIFICATIONS
-                        ? WEF_PERMISSION_STATUS_GRANTED
-                        : WEF_PERMISSION_STATUS_UNSUPPORTED);
+    wef_common::QueryPermissionStub(kind, cb, user_data);
   }
   void RequestPermission(int kind, wef_permission_callback_fn cb,
                          void* user_data) override {
-    QueryPermission(kind, cb, user_data);
+    wef_common::RequestPermissionStub(kind, cb, user_data);
   }
 
   void HandleJsMessage(uint32_t window_id, const std::wstring& json);
@@ -1217,66 +1030,13 @@ void WebView2Backend::OpenDevTools(uint32_t window_id) {
 // Dialog
 // ============================================================================
 
-int WebView2Backend::ShowDialog(uint32_t window_id, int dialog_type,
+int WebView2Backend::ShowDialog(uint32_t /*window_id*/, int dialog_type,
                                 const std::string& title,
                                 const std::string& message,
                                 const std::string& default_value,
                                 char** out_input_value) {
-  if (out_input_value)
-    *out_input_value = nullptr;
-  // Convert strings to wide strings for Win32 API
-  auto toWide = [](const std::string& s) -> std::wstring {
-    if (s.empty())
-      return L"";
-    int len = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
-    std::wstring ws(len - 1, 0);
-    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &ws[0], len);
-    return ws;
-  };
-
-  std::wstring wTitle = toWide(title);
-  std::wstring wMessage = toWide(message);
-
-  HWND hwnd = nullptr;
-  auto* win = GetWindow(window_id);
-  if (win)
-    hwnd = win->hwnd;
-
-  if (dialog_type == WEF_DIALOG_ALERT) {
-    MessageBoxW(hwnd, wMessage.c_str(), wTitle.c_str(),
-                MB_OK | MB_ICONINFORMATION);
-    return 1;
-  } else if (dialog_type == WEF_DIALOG_CONFIRM) {
-    int ret = MessageBoxW(hwnd, wMessage.c_str(), wTitle.c_str(),
-                          MB_OKCANCEL | MB_ICONQUESTION);
-    return (ret == IDOK) ? 1 : 0;
-  } else if (dialog_type == WEF_DIALOG_PROMPT) {
-    // Windows does not have a built-in prompt dialog, so use PowerShell
-    std::string script =
-        "Add-Type -AssemblyName Microsoft.VisualBasic; "
-        "[Microsoft.VisualBasic.Interaction]::InputBox('" +
-        message + "', '" + title + "', '" + default_value + "')";
-    std::string cmd = "powershell -Command \"" + script + "\"";
-
-    FILE* fp = _popen(cmd.c_str(), "r");
-    if (!fp)
-      return 0;
-    char buf[4096] = {};
-    std::string result;
-    while (fgets(buf, sizeof(buf), fp)) {
-      result += buf;
-    }
-    _pclose(fp);
-    // Trim trailing whitespace
-    while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
-      result.pop_back();
-    if (result.empty())
-      return 0;
-    if (out_input_value)
-      *out_input_value = _strdup(result.c_str());
-    return 1;
-  }
-  return 0;
+  return wef_common::ShowDialogWin(dialog_type, title, message, default_value,
+                                   out_input_value);
 }
 
 // ============================================================================
@@ -1336,31 +1096,9 @@ void WebView2Backend::SetDockBadge(const char* badge_or_null) {
 // ============================================================================
 
 #define WM_WV_TRAYICON (WM_APP + 2)
-#define WM_WV_NOTIFICATION (WM_APP + 3)
+// Notifications now live in backend-common (own message window).
 
 namespace {
-struct WvWinNotifEntry {
-  UINT uid;
-  HICON hicon;
-  std::string tag;
-  wef_notification_event_fn on_event;
-  void* user_data;
-};
-std::mutex& WvNotifMutexWin() {
-  static std::mutex m;
-  return m;
-}
-std::map<uint32_t, WvWinNotifEntry>& WvNotifMapWin() {
-  static std::map<uint32_t, WvWinNotifEntry> m;
-  return m;
-}
-std::map<UINT, uint32_t>& WvNotifUidToId() {
-  static std::map<UINT, uint32_t> m;
-  return m;
-}
-std::atomic<uint32_t> g_wv_next_notif_id_win{1};
-std::atomic<UINT> g_wv_next_notif_uid{0x4000};
-
 struct WvWinTrayEntry {
   UINT uid;
   HICON hicon_light;
@@ -1436,59 +1174,6 @@ LRESULT CALLBACK WvTrayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
   if (msg == WM_SETTINGCHANGE) {
     if (lp && wcscmp((LPCWSTR)lp, L"ImmersiveColorSet") == 0) {
       WvReapplyAllIcons();
-    }
-    return 0;
-  }
-  if (msg == WM_WV_NOTIFICATION) {
-    UINT uid = (UINT)wp;
-    UINT event = LOWORD(lp);
-    uint32_t nid = 0;
-    {
-      std::lock_guard<std::mutex> lock(WvNotifMutexWin());
-      auto it = WvNotifUidToId().find(uid);
-      if (it != WvNotifUidToId().end())
-        nid = it->second;
-    }
-    if (!nid)
-      return 0;
-    int reason = -1;
-    if (event == NIN_BALLOONSHOW)
-      reason = WEF_NOTIFICATION_SHOWN;
-    else if (event == NIN_BALLOONUSERCLICK)
-      reason = WEF_NOTIFICATION_CLICKED;
-    else if (event == NIN_BALLOONHIDE || event == NIN_BALLOONTIMEOUT)
-      reason = WEF_NOTIFICATION_CLOSED;
-    if (reason < 0)
-      return 0;
-    wef_notification_event_fn fn = nullptr;
-    void* user_data = nullptr;
-    bool is_terminal =
-        (reason == WEF_NOTIFICATION_CLOSED ||
-         reason == WEF_NOTIFICATION_CLICKED);
-    {
-      std::lock_guard<std::mutex> lock(WvNotifMutexWin());
-      auto it = WvNotifMapWin().find(nid);
-      if (it != WvNotifMapWin().end()) {
-        fn = it->second.on_event;
-        user_data = it->second.user_data;
-      }
-    }
-    if (fn)
-      fn(user_data, nid, reason, nullptr);
-    if (is_terminal) {
-      std::lock_guard<std::mutex> lock(WvNotifMutexWin());
-      auto it = WvNotifMapWin().find(nid);
-      if (it != WvNotifMapWin().end()) {
-        NOTIFYICONDATAW del = {};
-        del.cbSize = sizeof(del);
-        del.hWnd = hwnd;
-        del.uID = it->second.uid;
-        Shell_NotifyIconW(NIM_DELETE, &del);
-        if (it->second.hicon)
-          DestroyIcon(it->second.hicon);
-        WvNotifUidToId().erase(it->second.uid);
-        WvNotifMapWin().erase(it);
-      }
     }
     return 0;
   }
@@ -1886,180 +1571,18 @@ void WebView2Backend::SetTrayClickHandler(uint32_t tray_id,
 // Notifications (WebView2 Windows)
 // ============================================================================
 //
-// Same Shell_NotifyIcon balloon approach as the CEF Windows backend.
-// Click → CLICKED; dismiss/timeout → CLOSED. Action buttons (NIIF balloons
-// don't have them) are ignored.
-
-static HICON WvLoadDefaultAppIcon() {
-  HICON h = (HICON)LoadImageW(GetModuleHandleW(nullptr), IDI_APPLICATION,
-                              IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE);
-  return h;
-}
+// Thin trampoline over backend-common/src/notifications_win.cc.
 
 uint32_t WebView2Backend::ShowNotification(
     wef_value_t* options, const wef_backend_api_t* api,
     wef_notification_event_fn on_event, void* user_data) {
-  if (!options)
-    return 0;
-  if (!api->value_is_dict(options)) {
-    api->value_free(options);
-    return 0;
-  }
-
-  auto get_string = [&](const char* key) -> std::string {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_string(v))
-      return std::string();
-    size_t len = 0;
-    char* s = api->value_get_string(v, &len);
-    if (!s)
-      return std::string();
-    std::string out(s, len);
-    api->value_free_string(s);
-    return out;
-  };
-  auto get_bool = [&](const char* key, bool dfl) -> bool {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_bool(v))
-      return dfl;
-    return api->value_get_bool(v);
-  };
-  auto get_binary = [&](const char* key) -> std::vector<BYTE> {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_binary(v))
-      return {};
-    size_t len = 0;
-    const void* ptr = api->value_get_binary(v, &len);
-    if (!ptr || len == 0)
-      return {};
-    return std::vector<BYTE>((const BYTE*)ptr, (const BYTE*)ptr + len);
-  };
-
-  std::string title = get_string("title");
-  std::string body = get_string("body");
-  std::string tag = get_string("tag");
-  bool silent = get_bool("silent", false);
-  std::vector<BYTE> icon_png = get_binary("icon");
-
-  api->value_free(options);
-
-  // Tag → replace existing notification with the same tag.
-  if (!tag.empty()) {
-    std::vector<uint32_t> to_drop;
-    {
-      std::lock_guard<std::mutex> lock(WvNotifMutexWin());
-      for (auto& [id, e] : WvNotifMapWin()) {
-        if (e.tag == tag)
-          to_drop.push_back(id);
-      }
-    }
-    for (uint32_t old : to_drop) {
-      std::lock_guard<std::mutex> lock(WvNotifMutexWin());
-      auto it = WvNotifMapWin().find(old);
-      if (it == WvNotifMapWin().end())
-        continue;
-      HWND hwnd = g_wv_tray_hwnd;
-      if (hwnd) {
-        NOTIFYICONDATAW del = {};
-        del.cbSize = sizeof(del);
-        del.hWnd = hwnd;
-        del.uID = it->second.uid;
-        Shell_NotifyIconW(NIM_DELETE, &del);
-      }
-      if (it->second.hicon)
-        DestroyIcon(it->second.hicon);
-      WvNotifUidToId().erase(it->second.uid);
-      WvNotifMapWin().erase(it);
-    }
-  }
-
-  uint32_t nid =
-      g_wv_next_notif_id_win.fetch_add(1, std::memory_order_relaxed);
-  UINT uid = g_wv_next_notif_uid.fetch_add(1, std::memory_order_relaxed);
-
-  std::wstring wtitle, wbody;
-  if (!title.empty()) {
-    int n = MultiByteToWideChar(CP_UTF8, 0, title.c_str(), -1, nullptr, 0);
-    wtitle.resize(n > 0 ? n - 1 : 0);
-    if (n > 0)
-      MultiByteToWideChar(CP_UTF8, 0, title.c_str(), -1, wtitle.data(), n);
-  }
-  if (!body.empty()) {
-    int n = MultiByteToWideChar(CP_UTF8, 0, body.c_str(), -1, nullptr, 0);
-    wbody.resize(n > 0 ? n - 1 : 0);
-    if (n > 0)
-      MultiByteToWideChar(CP_UTF8, 0, body.c_str(), -1, wbody.data(), n);
-  }
-
-  HWND hwnd = EnsureWvTrayWindow();
-  if (!hwnd)
-    return 0;
-
-  HICON hicon = nullptr;
-  if (!icon_png.empty()) {
-    hicon =
-        WvDecodePngToHicon(icon_png.data(), icon_png.size(),
-                           GetSystemMetrics(SM_CXICON));
-  }
-  if (!hicon)
-    hicon = WvLoadDefaultAppIcon();
-
-  NOTIFYICONDATAW nd = {};
-  nd.cbSize = sizeof(nd);
-  nd.hWnd = hwnd;
-  nd.uID = uid;
-  nd.uFlags = NIF_MESSAGE | NIF_ICON | NIF_INFO;
-  nd.uCallbackMessage = WM_WV_NOTIFICATION;
-  nd.hIcon = hicon;
-  wcsncpy_s(nd.szInfoTitle, wtitle.c_str(), _TRUNCATE);
-  wcsncpy_s(nd.szInfo, wbody.c_str(), _TRUNCATE);
-  nd.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON;
-  if (silent)
-    nd.dwInfoFlags |= NIIF_NOSOUND;
-
-  if (!Shell_NotifyIconW(NIM_ADD, &nd)) {
-    if (hicon)
-      DestroyIcon(hicon);
-    return 0;
-  }
-
-  std::lock_guard<std::mutex> lock(WvNotifMutexWin());
-  WvWinNotifEntry e = {};
-  e.uid = uid;
-  e.hicon = hicon;
-  e.tag = tag;
-  e.on_event = on_event;
-  e.user_data = user_data;
-  WvNotifMapWin()[nid] = e;
-  WvNotifUidToId()[uid] = nid;
-  return nid;
+  wef_common::NotificationOptions opts =
+      wef_common::ParseNotificationOptions(options, api);
+  return wef_common::ShowNotificationWin(opts, on_event, user_data);
 }
 
 void WebView2Backend::CloseNotification(uint32_t notification_id) {
-  HWND hwnd = g_wv_tray_hwnd;
-  wef_notification_event_fn fn = nullptr;
-  void* ud = nullptr;
-  {
-    std::lock_guard<std::mutex> lock(WvNotifMutexWin());
-    auto it = WvNotifMapWin().find(notification_id);
-    if (it == WvNotifMapWin().end())
-      return;
-    if (hwnd) {
-      NOTIFYICONDATAW del = {};
-      del.cbSize = sizeof(del);
-      del.hWnd = hwnd;
-      del.uID = it->second.uid;
-      Shell_NotifyIconW(NIM_DELETE, &del);
-    }
-    if (it->second.hicon)
-      DestroyIcon(it->second.hicon);
-    WvNotifUidToId().erase(it->second.uid);
-    fn = it->second.on_event;
-    ud = it->second.user_data;
-    WvNotifMapWin().erase(it);
-  }
-  if (fn)
-    fn(ud, notification_id, WEF_NOTIFICATION_CLOSED, nullptr);
+  wef_common::CloseNotificationWin(notification_id);
 }
 
 // ============================================================================

@@ -43,8 +43,9 @@ execution, event handlers, window management) is a nullable function pointer in
 this struct.
 
 **Adding a new API**: add the field to `wef_backend_api_t` in
-`capi/include/wef.h`, then implement it in every backend. The CEF and webview
-backends each have a local copy of `wef.h` that must be kept in sync.
+`capi/include/wef.h`, then implement it in every backend. Both C++ backends
+include the canonical header from `capi/include/` via the `WEF_INCLUDE_DIR`
+CMake variable — there is no second copy to sync.
 
 ### Callback registration (event handlers)
 
@@ -61,6 +62,59 @@ converts C types to Rust types and forwards to a stored `Box<dyn Fn(Event)>`.
 
 **Events are non-consuming** -- handlers always return the event to the
 underlying engine. This is an interception model, not a consumption model.
+
+### C++ backend code sharing (`backend-common`)
+
+The CEF and webview backends both link `backend-common/`, a CMake static
+library that holds platform implementations of APIs the two backends would
+otherwise duplicate. Each backend `add_subdirectory`s it and links
+`wef_backend_common` from its platform branch.
+
+The bridge is intentionally minimal — common code never touches the
+backend-specific `wef_value_t` types. Each backend pre-parses
+`wef_value_t` into plain C++ structs (`wef_common::NotificationOptions`,
+etc.) before calling into common functions. Header:
+`backend-common/include/wef_backend_common.h`.
+
+Currently shared:
+
+| Area              | macOS                              | Windows                            | Linux                              |
+| ----------------- | ---------------------------------- | ---------------------------------- | ---------------------------------- |
+| **Notifications** | `notifications_mac.mm` (UN)        | `notifications_win.cc` (NIIF)      | `notifications_linux.cc` (notify-send) |
+| **Dialogs**       | `dialog_mac.mm` (NSAlert)          | `dialog_win.cc` (MessageBoxW + PowerShell prompt) | `dialog_linux.cc` (gtk_message_dialog) |
+| **Permissions**   | `permissions_mac.mm` (UN auth)     | `permissions_stub.cc` (always granted) | `permissions_stub.cc` (always granted) |
+| **Dock (app-scoped)** | `dock_mac.mm` (badge / bounce / visible) | per-backend (FlashWindowEx)        | per-backend (gtk_window_set_urgency_hint) |
+| **Key mapping**   | `keymap_mac.mm` (NSEvent → W3C)    | `keymap_vk.cc` (VK → W3C; CEF uses on every platform) | `keymap_gdk.cc` (GDK → W3C) |
+| **App / context menu** | `menu_mac.mm` (NSMenu)       | `capi/include/win32_menu.h` (HMENU + SetMenu / TrackPopupMenu) | `menu_linux.cc` (GtkMenu / GtkMenuBar) |
+| **Tray icons**    | `tray_mac.mm` (NSStatusItem)       | per-backend (Shell_NotifyIcon + WIC + HMENU; ~500 LOC dup, see below) | `tray_linux.cc` (libappindicator + g_idle_add) |
+| **Option parsing**| `parse_options.cc` (compiled on every platform; bridges `wef_value_t` → plain structs) |||
+
+Note: `win32_menu.h` is the older shared header-only library for Windows menu construction; it predates `backend-common` and stays as-is. The two
+patterns coexist — both backends already use `win32_menu` for Windows
+menus, and `backend-common` for the rest.
+
+Not yet shared:
+
+- **Windows tray icons**: ~500 LOC Shell_NotifyIcon + WIC PNG decode +
+  per-tray HMENU + WndProc-based click dispatch. The two impls are
+  near-identical line-for-line duplicates in
+  `cef/src/runtime_loader.cc` and `webview/src/webview_windows.cc`.
+  Extracting needs a per-tray-uid command-id dispatcher distinct from
+  `win32_menu`'s per-HWND model. Doable but unverifiable from a
+  non-Windows dev box.
+- **Dock fallbacks (Win/Linux)**: title-prefix badge + FlashWindow /
+  GTK urgency hint. These iterate per-window state inside each
+  backend, so sharing them needs either a window-enumeration callback
+  abstraction or moving window-list ownership into common — both
+  bigger lifts than the dedup saves.
+- **Dock menu / reopen handler (macOS)**: stays per-backend because it
+  hooks into each backend's own `WefAppDelegate`. The menu it builds
+  uses `wef_common::BuildNSMenuFromValue`, so the duplication is just
+  the AppDelegate plumbing.
+
+To add a new shared API: declare it in `wef_backend_common.h`, add the
+implementation file(s) to `backend-common/CMakeLists.txt`, then call it
+from each backend's existing API trampoline.
 
 ### Winit backend code sharing (`backend-winit-common`)
 

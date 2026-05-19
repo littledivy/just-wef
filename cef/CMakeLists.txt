@@ -24,6 +24,11 @@ endif()
 
 set(WEF_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../capi/include" CACHE PATH "Path to wef.h header directory")
 
+# Shared native-API implementations (notifications, tray, dock, dialogs, ...).
+# Each platform branch links wef_backend_common below.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../backend-common
+                 ${CMAKE_BINARY_DIR}/backend-common)
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 
 find_package(CEF REQUIRED)
@@ -91,6 +96,7 @@ if(OS_MAC)
     )
   endif()
   target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS}
+    wef_backend_common
     "-framework UserNotifications")
   target_include_directories(${CEF_TARGET} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src" "${WEF_INCLUDE_DIR}")
   set_target_properties(${CEF_TARGET} PROPERTIES
@@ -171,7 +177,7 @@ elseif(OS_WINDOWS)
 
   add_executable(${CEF_TARGET} WIN32 ${WEF_SRCS_COMMON} ${WEF_SRCS_WIN})
   SET_EXECUTABLE_TARGET_PROPERTIES(${CEF_TARGET})
-  target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_LIB_RELEASE} ${CEF_STANDARD_LIBS})
+  target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_LIB_RELEASE} ${CEF_STANDARD_LIBS} wef_backend_common)
   target_include_directories(${CEF_TARGET} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src" "${WEF_INCLUDE_DIR}")
 
   # Copy CEF binaries and resources to the output directory
@@ -229,7 +235,7 @@ elseif(OS_LINUX)
   # not part of Chromium's runtime, so its entry-time canary no longer matches
   # at return, tripping __stack_chk_fail. Disable stack protection to bypass.
   target_compile_options(${CEF_TARGET} PRIVATE -fno-stack-protector)
-  target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_LIB_RELEASE} ${CEF_STANDARD_LIBS} ${GTK3_LIBRARIES} ${XI2_LIBRARIES} ${APPINDICATOR_LIBRARIES})
+  target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_LIB_RELEASE} ${CEF_STANDARD_LIBS} ${GTK3_LIBRARIES} ${XI2_LIBRARIES} ${APPINDICATOR_LIBRARIES} wef_backend_common)
   target_link_directories(${CEF_TARGET} PRIVATE ${GTK3_LIBRARY_DIRS} ${XI2_LIBRARY_DIRS} ${APPINDICATOR_LIBRARY_DIRS})
   target_include_directories(${CEF_TARGET} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"

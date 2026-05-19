@@ -2,6 +2,7 @@
 
 #include "runtime_loader.h"
 #include "app.h"
+#include "wef_backend_common.h"
 
 #ifndef _WIN32
 #include <dlfcn.h>
@@ -941,29 +942,19 @@ extern "C" void Backend_CloseNotification_Linux(void* data,
 // --- Permissions / runtime authorization ---
 //
 // macOS routes to UNUserNotificationCenter (see runtime_loader_mac.mm).
-// Windows uses Shell_NotifyIcon balloons today which have no permission
-// model; Linux uses libnotify which is equally permission-less. Both
-// report GRANTED synchronously for WEF_PERMISSION_NOTIFICATIONS and
-// UNSUPPORTED for any other kind.
+// Windows + Linux permission stubs live in backend-common
+// (wef_common::QueryPermissionStub / RequestPermissionStub).
 #if !defined(__APPLE__)
 static void Backend_QueryPermission_Stub(void* /*data*/, int kind,
                                          wef_permission_callback_fn cb,
                                          void* user_data) {
-  if (!cb)
-    return;
-  cb(user_data, kind == WEF_PERMISSION_NOTIFICATIONS
-                    ? WEF_PERMISSION_STATUS_GRANTED
-                    : WEF_PERMISSION_STATUS_UNSUPPORTED);
+  wef_common::QueryPermissionStub(kind, cb, user_data);
 }
 
 static void Backend_RequestPermission_Stub(void* /*data*/, int kind,
                                            wef_permission_callback_fn cb,
                                            void* user_data) {
-  if (!cb)
-    return;
-  cb(user_data, kind == WEF_PERMISSION_NOTIFICATIONS
-                    ? WEF_PERMISSION_STATUS_GRANTED
-                    : WEF_PERMISSION_STATUS_UNSUPPORTED);
+  wef_common::RequestPermissionStub(kind, cb, user_data);
 }
 #endif
 
@@ -1070,34 +1061,7 @@ static void Backend_BounceDock_Win(void* data, int type) {
 // WM_TRAYICON (one per process). PNG → HICON via WIC.
 
 #define WM_WEF_TRAYICON (WM_APP + 1)
-#define WM_WEF_NOTIFICATION (WM_APP + 2)
-
-// Notifications get a separate uid space from tray icons so they don't
-// collide on the shared g_tray_msg_hwnd.
-struct WinNotifEntry {
-  UINT uid;
-  HICON hicon;  // hidden icon for the balloon (one per notification)
-  std::string tag;
-  wef_notification_event_fn on_event;
-  void* user_data;
-  bool require_interaction;
-};
-static std::mutex& NotifMutexWin() {
-  static std::mutex m;
-  return m;
-}
-static std::map<uint32_t, WinNotifEntry>& NotifMapWin() {
-  static std::map<uint32_t, WinNotifEntry> map;
-  return map;
-}
-// uid (Shell_NotifyIcon ID) → notification_id (our id space)
-static std::map<UINT, uint32_t>& NotifUidToIdWin() {
-  static std::map<UINT, uint32_t> map;
-  return map;
-}
-static std::atomic<uint32_t> g_next_notif_id_win{1};
-// uids start above any reasonable tray-id range to avoid colliding.
-static std::atomic<UINT> g_next_notif_uid{0x4000};
+// Notifications now live in backend-common (its own message window).
 
 struct WinTrayEntry {
   UINT uid;
@@ -1135,62 +1099,6 @@ static LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
   if (msg == WM_SETTINGCHANGE) {
     if (lp && wcscmp((LPCWSTR)lp, L"ImmersiveColorSet") == 0) {
       ReapplyAllWinTrayIcons();
-    }
-    return 0;
-  }
-  if (msg == WM_WEF_NOTIFICATION) {
-    UINT uid = (UINT)wp;
-    UINT event = LOWORD(lp);
-    uint32_t nid = 0;
-    {
-      std::lock_guard<std::mutex> lock(NotifMutexWin());
-      auto it = NotifUidToIdWin().find(uid);
-      if (it != NotifUidToIdWin().end())
-        nid = it->second;
-    }
-    if (!nid)
-      return 0;
-    int reason = -1;
-    if (event == NIN_BALLOONSHOW)
-      reason = WEF_NOTIFICATION_SHOWN;
-    else if (event == NIN_BALLOONUSERCLICK)
-      reason = WEF_NOTIFICATION_CLICKED;
-    else if (event == NIN_BALLOONHIDE || event == NIN_BALLOONTIMEOUT)
-      reason = WEF_NOTIFICATION_CLOSED;
-    if (reason < 0)
-      return 0;
-    wef_notification_event_fn fn = nullptr;
-    void* user_data = nullptr;
-    bool is_terminal =
-        (reason == WEF_NOTIFICATION_CLOSED ||
-         reason == WEF_NOTIFICATION_CLICKED);
-    {
-      std::lock_guard<std::mutex> lock(NotifMutexWin());
-      auto it = NotifMapWin().find(nid);
-      if (it != NotifMapWin().end()) {
-        fn = it->second.on_event;
-        user_data = it->second.user_data;
-      }
-    }
-    if (fn)
-      fn(user_data, nid, reason, nullptr);
-    if (is_terminal) {
-      // Tear down the Shell_NotifyIcon on terminal events so the hidden
-      // icon doesn't accumulate. require_interaction has no equivalent
-      // on Windows balloons (the system-level toast governs lifetime).
-      std::lock_guard<std::mutex> lock(NotifMutexWin());
-      auto it = NotifMapWin().find(nid);
-      if (it != NotifMapWin().end()) {
-        NOTIFYICONDATAW nid_data = {};
-        nid_data.cbSize = sizeof(nid_data);
-        nid_data.hWnd = hwnd;
-        nid_data.uID = it->second.uid;
-        Shell_NotifyIconW(NIM_DELETE, &nid_data);
-        if (it->second.hicon)
-          DestroyIcon(it->second.hicon);
-        NotifUidToIdWin().erase(it->second.uid);
-        NotifMapWin().erase(it);
-      }
     }
     return 0;
   }
@@ -1692,204 +1600,20 @@ void Backend_SetTrayClickHandler_Win(void* /*data*/, uint32_t tray_id,
 
 // --- Notifications (Windows) ---
 //
-// Implemented as a hidden Shell_NotifyIcon balloon. On Windows 10/11 the
-// shell intercepts the balloon and renders a system toast (with grouping,
-// Action Center entry, etc.). Click → CLICKED, dismiss/timeout → CLOSED.
-// Action buttons aren't supported by NIIF balloons — `actions` from the
-// options dict are silently ignored on Windows.
-
-static HICON LoadDefaultAppIcon() {
-  HICON h = (HICON)LoadImageW(GetModuleHandleW(nullptr), IDI_APPLICATION,
-                              IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE);
-  return h;
-}
+// Thin trampolines over backend-common/src/notifications_win.cc.
 
 static uint32_t Backend_ShowNotification_Win(
     void* data, wef_value_t* options, wef_notification_event_fn on_event,
     void* user_data) {
-  if (!options)
-    return 0;
   RuntimeLoader* loader = static_cast<RuntimeLoader*>(data);
-  const wef_backend_api_t* api = &loader->GetBackendApi();
-  if (!api->value_is_dict(options)) {
-    api->value_free(options);
-    return 0;
-  }
-
-  auto get_string = [&](const char* key) -> std::string {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_string(v))
-      return std::string();
-    size_t len = 0;
-    char* s = api->value_get_string(v, &len);
-    if (!s)
-      return std::string();
-    std::string out(s, len);
-    api->value_free_string(s);
-    return out;
-  };
-  auto get_bool = [&](const char* key, bool dfl) -> bool {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_bool(v))
-      return dfl;
-    return api->value_get_bool(v);
-  };
-  auto get_binary = [&](const char* key) -> std::vector<BYTE> {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_binary(v))
-      return {};
-    size_t len = 0;
-    const void* ptr = api->value_get_binary(v, &len);
-    if (!ptr || len == 0)
-      return {};
-    return std::vector<BYTE>((const BYTE*)ptr, (const BYTE*)ptr + len);
-  };
-
-  std::string title = get_string("title");
-  std::string body = get_string("body");
-  std::string tag = get_string("tag");
-  bool silent = get_bool("silent", false);
-  std::vector<BYTE> icon_png = get_binary("icon");
-
-  api->value_free(options);
-
-  // Tag-based replacement: drop any existing notification with the same tag.
-  if (!tag.empty()) {
-    std::vector<uint32_t> to_drop;
-    {
-      std::lock_guard<std::mutex> lock(NotifMutexWin());
-      for (auto& [id, e] : NotifMapWin()) {
-        if (e.tag == tag)
-          to_drop.push_back(id);
-      }
-    }
-    for (uint32_t old : to_drop) {
-      // Re-enter through Backend_CloseNotification_Win below for cleanup
-      // symmetry — defined later in this section, but the closure captures
-      // it through the function-pointer table so a forward call is fine.
-      // Simpler: tear down inline.
-      std::lock_guard<std::mutex> lock(NotifMutexWin());
-      auto it = NotifMapWin().find(old);
-      if (it == NotifMapWin().end())
-        continue;
-      HWND hwnd = g_tray_msg_hwnd;
-      if (hwnd) {
-        NOTIFYICONDATAW del = {};
-        del.cbSize = sizeof(del);
-        del.hWnd = hwnd;
-        del.uID = it->second.uid;
-        Shell_NotifyIconW(NIM_DELETE, &del);
-      }
-      if (it->second.hicon)
-        DestroyIcon(it->second.hicon);
-      NotifUidToIdWin().erase(it->second.uid);
-      NotifMapWin().erase(it);
-    }
-  }
-
-  uint32_t nid = g_next_notif_id_win.fetch_add(1, std::memory_order_relaxed);
-  UINT uid = g_next_notif_uid.fetch_add(1, std::memory_order_relaxed);
-
-  std::wstring wtitle, wbody;
-  if (!title.empty()) {
-    int n = MultiByteToWideChar(CP_UTF8, 0, title.c_str(), -1, nullptr, 0);
-    wtitle.resize(n > 0 ? n - 1 : 0);
-    if (n > 0)
-      MultiByteToWideChar(CP_UTF8, 0, title.c_str(), -1, wtitle.data(), n);
-  }
-  if (!body.empty()) {
-    int n = MultiByteToWideChar(CP_UTF8, 0, body.c_str(), -1, nullptr, 0);
-    wbody.resize(n > 0 ? n - 1 : 0);
-    if (n > 0)
-      MultiByteToWideChar(CP_UTF8, 0, body.c_str(), -1, wbody.data(), n);
-  }
-
-  CefPostTask(
-      TID_UI,
-      base::BindOnce(
-          [](uint32_t nid, UINT uid, std::wstring wtitle, std::wstring wbody,
-             std::string tag, bool silent, std::vector<BYTE> icon_png,
-             wef_notification_event_fn on_event, void* user_data) {
-            HWND hwnd = EnsureTrayMessageWindow();
-            if (!hwnd)
-              return;
-
-            HICON hicon = nullptr;
-            if (!icon_png.empty()) {
-              hicon = DecodePngToHicon(icon_png.data(), icon_png.size(),
-                                       GetSystemMetrics(SM_CXICON));
-            }
-            if (!hicon)
-              hicon = LoadDefaultAppIcon();
-
-            NOTIFYICONDATAW nd = {};
-            nd.cbSize = sizeof(nd);
-            nd.hWnd = hwnd;
-            nd.uID = uid;
-            nd.uFlags = NIF_MESSAGE | NIF_ICON | NIF_INFO;
-            nd.uCallbackMessage = WM_WEF_NOTIFICATION;
-            nd.hIcon = hicon;
-            wcsncpy_s(nd.szInfoTitle, wtitle.c_str(), _TRUNCATE);
-            wcsncpy_s(nd.szInfo, wbody.c_str(), _TRUNCATE);
-            nd.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON;
-            if (silent)
-              nd.dwInfoFlags |= NIIF_NOSOUND;
-
-            // Add (or modify) the icon, then NIM_MODIFY with NIF_INFO to
-            // trigger the balloon. Using a single ADD with NIF_INFO works
-            // on modern Windows.
-            if (!Shell_NotifyIconW(NIM_ADD, &nd)) {
-              if (hicon)
-                DestroyIcon(hicon);
-              return;
-            }
-
-            std::lock_guard<std::mutex> lock(NotifMutexWin());
-            WinNotifEntry e = {};
-            e.uid = uid;
-            e.hicon = hicon;
-            e.tag = tag;
-            e.on_event = on_event;
-            e.user_data = user_data;
-            NotifMapWin()[nid] = e;
-            NotifUidToIdWin()[uid] = nid;
-          },
-          nid, uid, std::move(wtitle), std::move(wbody), std::move(tag), silent,
-          std::move(icon_png), on_event, user_data));
-
-  return nid;
+  wef_common::NotificationOptions opts =
+      wef_common::ParseNotificationOptions(options, &loader->GetBackendApi());
+  return wef_common::ShowNotificationWin(opts, on_event, user_data);
 }
 
 static void Backend_CloseNotification_Win(void* /*data*/,
                                           uint32_t notification_id) {
-  CefPostTask(TID_UI, base::BindOnce(
-                          [](uint32_t nid) {
-                            HWND hwnd = g_tray_msg_hwnd;
-                            wef_notification_event_fn fn = nullptr;
-                            void* ud = nullptr;
-                            {
-                              std::lock_guard<std::mutex> lock(NotifMutexWin());
-                              auto it = NotifMapWin().find(nid);
-                              if (it == NotifMapWin().end())
-                                return;
-                              if (hwnd) {
-                                NOTIFYICONDATAW del = {};
-                                del.cbSize = sizeof(del);
-                                del.hWnd = hwnd;
-                                del.uID = it->second.uid;
-                                Shell_NotifyIconW(NIM_DELETE, &del);
-                              }
-                              if (it->second.hicon)
-                                DestroyIcon(it->second.hicon);
-                              NotifUidToIdWin().erase(it->second.uid);
-                              fn = it->second.on_event;
-                              ud = it->second.user_data;
-                              NotifMapWin().erase(it);
-                            }
-                            if (fn)
-                              fn(ud, nid, WEF_NOTIFICATION_CLOSED, nullptr);
-                          },
-                          notification_id));
+  wef_common::CloseNotificationWin(notification_id);
 }
 
 #elif defined(__linux__)
@@ -2022,76 +1746,20 @@ static int Backend_ShowDialog(void* /*data*/, uint32_t /*window_id*/,
                               int dialog_type, const char* title,
                               const char* message, const char* default_value,
                               char** out_input_value) {
-  if (out_input_value)
-    *out_input_value = nullptr;
   std::string title_str = title ? title : "";
   std::string message_str = message ? message : "";
   std::string default_str = default_value ? default_value : "";
-
 #ifdef __APPLE__
-  return ShowNativeDialog_Mac(dialog_type, title_str.c_str(),
-                              message_str.c_str(), default_str.c_str(),
-                              out_input_value);
+  return wef_common::ShowDialogMac(dialog_type, title_str, message_str,
+                                   default_str, out_input_value);
 #elif defined(__linux__)
-  // Use zenity for dialogs on Linux. zenity itself runs a nested GTK loop;
-  // system()/popen() block until it exits.
-  std::string cmd;
-  if (dialog_type == WEF_DIALOG_ALERT) {
-    cmd = "zenity --info --title=\"" + title_str + "\" --text=\"" +
-          message_str + "\" 2>/dev/null";
-    system(cmd.c_str());
-    return 1;
-  } else if (dialog_type == WEF_DIALOG_CONFIRM) {
-    cmd = "zenity --question --title=\"" + title_str + "\" --text=\"" +
-          message_str + "\" 2>/dev/null";
-    int ret = system(cmd.c_str());
-    return (ret == 0) ? 1 : 0;
-  } else if (dialog_type == WEF_DIALOG_PROMPT) {
-    cmd = "zenity --entry --title=\"" + title_str + "\" --text=\"" +
-          message_str + "\" --entry-text=\"" + default_str + "\" 2>/dev/null";
-    FILE* fp = popen(cmd.c_str(), "r");
-    if (!fp)
-      return 0;
-    char buf[4096] = {};
-    if (fgets(buf, sizeof(buf), fp)) {
-      size_t len = strlen(buf);
-      if (len > 0 && buf[len - 1] == '\n')
-        buf[len - 1] = '\0';
-    }
-    int ret = pclose(fp);
-    if (ret != 0)
-      return 0;
-    if (out_input_value)
-      *out_input_value = strdup(buf);
-    return 1;
-  }
-  return 0;
+  return wef_common::ShowDialogLinux(dialog_type, title_str, message_str,
+                                     default_str, out_input_value);
 #elif defined(_WIN32)
-  // CEF's TID_UI is the same OS thread we were called on (the main thread
-  // for our consumers). We can't `CefPostTask` and wait — that would
-  // deadlock. Call MessageBoxW directly; it pumps the Win32 message loop
-  // for the duration of the modal so other CEF windows keep responding.
-  if (dialog_type == WEF_DIALOG_ALERT) {
-    MessageBoxA(nullptr, message_str.c_str(), title_str.c_str(),
-                MB_OK | MB_ICONINFORMATION);
-    return 1;
-  } else if (dialog_type == WEF_DIALOG_CONFIRM) {
-    int ret = MessageBoxA(nullptr, message_str.c_str(), title_str.c_str(),
-                          MB_OKCANCEL | MB_ICONQUESTION);
-    return (ret == IDOK) ? 1 : 0;
-  } else if (dialog_type == WEF_DIALOG_PROMPT) {
-    // Windows still doesn't have a built-in prompt dialog. Until a custom
-    // dialog is wired in, show the message and on OK return the default.
-    int ret = MessageBoxA(nullptr, message_str.c_str(), title_str.c_str(),
-                          MB_OKCANCEL | MB_ICONQUESTION);
-    if (ret != IDOK)
-      return 0;
-    if (out_input_value)
-      *out_input_value = _strdup(default_str.c_str());
-    return 1;
-  }
-  return 0;
+  return wef_common::ShowDialogWin(dialog_type, title_str, message_str,
+                                   default_str, out_input_value);
 #else
+  (void)out_input_value;
   return 0;
 #endif
 }

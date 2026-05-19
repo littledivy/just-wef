@@ -10,6 +10,11 @@ elseif(WIN32)
   set(PLATFORM_WINDOWS TRUE)
 endif()
 
+# Shared native-API implementations (notifications, tray, dock, dialogs, ...).
+# Each platform branch links wef_backend_common below.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../backend-common
+                 ${CMAKE_BINARY_DIR}/backend-common)
+
 set(WEF_SRCS_COMMON
   src/webview_value.h
   src/runtime_loader.cc
@@ -50,6 +55,7 @@ if(PLATFORM_MACOS)
     ${COCOA_FRAMEWORK}
     ${WEBKIT_FRAMEWORK}
     ${USERNOTIFICATIONS_FRAMEWORK}
+    wef_backend_common
   )
 
   target_compile_options(${WEF_TARGET} PRIVATE -fobjc-arc)
@@ -86,6 +92,7 @@ elseif(PLATFORM_LINUX)
     ${WEBKITGTK_LIBRARIES}
     ${GTK_LIBRARIES}
     ${APPINDICATOR_LIBRARIES}
+    wef_backend_common
     dl
     pthread
   )
@@ -131,6 +138,7 @@ elseif(PLATFORM_WINDOWS)
     ole32
     oleaut32
     shlwapi
+    wef_backend_common
   )
 endif()
 

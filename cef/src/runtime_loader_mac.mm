@@ -3,6 +3,7 @@
 // helpers.
 
 #include "runtime_loader.h"
+#include "wef_backend_common.h"
 
 #include <atomic>
 #include <map>
@@ -347,313 +348,16 @@ NativeDialogResult ShowNativeJSDialog_Mac(int type, const std::string& message,
   return result;
 }
 
-// --- Native Dialog (macOS) ---
+// --- Application Menu / Context Menu (macOS) ---
+//
+// Menu construction lives in backend-common (wef_common::BuildNSMenuFromValue).
 
-int ShowNativeDialog_Mac(int dialog_type, const char* title,
-                         const char* message, const char* default_value,
-                         char** out_input_value) {
-  if (out_input_value)
-    *out_input_value = nullptr;
-  NSString* nsTitle = title ? [NSString stringWithUTF8String:title] : @"";
-  NSString* nsMessage = message ? [NSString stringWithUTF8String:message] : @"";
-  NSString* nsDefault =
-      default_value ? [NSString stringWithUTF8String:default_value] : @"";
-
-  // `runModal` itself spins NSRunLoop, pumping AppKit events for other
-  // CEF windows while the dialog is up. Done on main directly when the
-  // caller is already there (the typical case for the Deno runtime),
-  // otherwise dispatch_sync forwards.
-  __block bool confirmed = false;
-  __block char* input_strdup = nullptr;
-  void (^body)(void) = ^{
-    NSAlert* alert = [[NSAlert alloc] init];
-    [alert setMessageText:nsTitle];
-    [alert setInformativeText:nsMessage];
-
-    NSTextField* inputField = nil;
-
-    if (dialog_type == WEF_DIALOG_ALERT) {
-      [alert addButtonWithTitle:@"OK"];
-    } else if (dialog_type == WEF_DIALOG_CONFIRM) {
-      [alert addButtonWithTitle:@"OK"];
-      [alert addButtonWithTitle:@"Cancel"];
-    } else if (dialog_type == WEF_DIALOG_PROMPT) {
-      [alert addButtonWithTitle:@"OK"];
-      [alert addButtonWithTitle:@"Cancel"];
-      inputField =
-          [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 300, 24)];
-      [inputField setStringValue:nsDefault];
-      [alert setAccessoryView:inputField];
-      [alert layout];
-      [[alert window] makeFirstResponder:inputField];
-    }
-
-    NSModalResponse response = [alert runModal];
-    confirmed = (response == NSAlertFirstButtonReturn);
-    if (dialog_type == WEF_DIALOG_PROMPT && confirmed && inputField &&
-        out_input_value) {
-      const char* text = [[inputField stringValue] UTF8String];
-      if (text)
-        input_strdup = strdup(text);
-    }
-  };
-  if ([NSThread isMainThread]) {
-    body();
-  } else {
-    dispatch_sync(dispatch_get_main_queue(), body);
-  }
-  if (out_input_value)
-    *out_input_value = input_strdup;
-  return confirmed ? 1 : 0;
-}
-
-// --- Application Menu (macOS) ---
-
-static wef_menu_click_fn g_menu_click_fn = nullptr;
-static void* g_menu_click_data = nullptr;
-
-@interface WefMenuTarget : NSObject
-+ (instancetype)shared;
-- (void)menuItemClicked:(id)sender;
-@end
-
-@implementation WefMenuTarget
-
-+ (instancetype)shared {
-  static WefMenuTarget* instance = nil;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    instance = [[WefMenuTarget alloc] init];
-  });
-  return instance;
-}
-
-- (void)menuItemClicked:(id)sender {
-  NSMenuItem* item = (NSMenuItem*)sender;
-  NSString* itemId = [item representedObject];
-  if (itemId && g_menu_click_fn) {
-    uint32_t wid = WefIdForNSWindow([NSApp keyWindow]);
-    g_menu_click_fn(g_menu_click_data, wid, [itemId UTF8String]);
-  }
-}
-
-@end
-
-static void ParseAccelerator(const std::string& accel, NSString** outKey,
-                             NSEventModifierFlags* outMask) {
-  *outKey = @"";
-  *outMask = 0;
-
-  std::string lower = accel;
-  for (auto& c : lower)
-    c = tolower(c);
-
-  size_t pos = 0;
-  std::vector<std::string> parts;
-  std::string remaining = lower;
-  while ((pos = remaining.find('+')) != std::string::npos) {
-    parts.push_back(remaining.substr(0, pos));
-    remaining = remaining.substr(pos + 1);
-  }
-  if (!remaining.empty())
-    parts.push_back(remaining);
-
-  for (const auto& part : parts) {
-    if (part == "cmd" || part == "command" || part == "cmdorctrl" ||
-        part == "commandorcontrol") {
-      *outMask |= NSEventModifierFlagCommand;
-    } else if (part == "shift") {
-      *outMask |= NSEventModifierFlagShift;
-    } else if (part == "alt" || part == "option") {
-      *outMask |= NSEventModifierFlagOption;
-    } else if (part == "ctrl" || part == "control") {
-      *outMask |= NSEventModifierFlagControl;
-    } else {
-      *outKey = [NSString stringWithUTF8String:part.c_str()];
-    }
-  }
-}
-
-static NSMenuItem* CreateRoleMenuItem(const std::string& role) {
-  NSString* title = @"";
-  SEL action = nil;
-  NSString* keyEquiv = @"";
-  NSEventModifierFlags mask = NSEventModifierFlagCommand;
-
-  if (role == "quit") {
-    title = @"Quit";
-    action = @selector(terminate:);
-    keyEquiv = @"q";
-  } else if (role == "copy") {
-    title = @"Copy";
-    action = @selector(copy:);
-    keyEquiv = @"c";
-  } else if (role == "paste") {
-    title = @"Paste";
-    action = @selector(paste:);
-    keyEquiv = @"v";
-  } else if (role == "cut") {
-    title = @"Cut";
-    action = @selector(cut:);
-    keyEquiv = @"x";
-  } else if (role == "selectall" || role == "selectAll") {
-    title = @"Select All";
-    action = @selector(selectAll:);
-    keyEquiv = @"a";
-  } else if (role == "undo") {
-    title = @"Undo";
-    action = @selector(undo:);
-    keyEquiv = @"z";
-  } else if (role == "redo") {
-    title = @"Redo";
-    action = @selector(redo:);
-    keyEquiv = @"Z";
-    mask = NSEventModifierFlagCommand | NSEventModifierFlagShift;
-  } else if (role == "minimize") {
-    title = @"Minimize";
-    action = @selector(performMiniaturize:);
-    keyEquiv = @"m";
-  } else if (role == "zoom") {
-    title = @"Zoom";
-    action = @selector(performZoom:);
-  } else if (role == "close") {
-    title = @"Close";
-    action = @selector(performClose:);
-    keyEquiv = @"w";
-  } else if (role == "about") {
-    title = @"About";
-    action = @selector(orderFrontStandardAboutPanel:);
-  } else if (role == "hide") {
-    title = @"Hide";
-    action = @selector(hide:);
-    keyEquiv = @"h";
-  } else if (role == "hideothers" || role == "hideOthers") {
-    title = @"Hide Others";
-    action = @selector(hideOtherApplications:);
-    keyEquiv = @"h";
-    mask = NSEventModifierFlagCommand | NSEventModifierFlagOption;
-  } else if (role == "unhide") {
-    title = @"Show All";
-    action = @selector(unhideAllApplications:);
-  } else if (role == "front") {
-    title = @"Bring All to Front";
-    action = @selector(arrangeInFront:);
-  } else if (role == "togglefullscreen" || role == "toggleFullScreen") {
-    title = @"Toggle Full Screen";
-    action = @selector(toggleFullScreen:);
-    keyEquiv = @"f";
-    mask = NSEventModifierFlagCommand | NSEventModifierFlagControl;
-  } else {
-    return nil;
-  }
-
-  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:title
-                                                action:action
-                                         keyEquivalent:keyEquiv];
-  [item setKeyEquivalentModifierMask:mask];
-  return item;
-}
-
-static NSMenu* BuildMenuFromValue(wef_value_t* val,
-                                  const wef_backend_api_t* api, id target,
-                                  SEL action) {
-  if (!val || !api->value_is_list(val))
-    return nil;
-  NSMenu* menu = [[NSMenu alloc] init];
-  [menu setAutoenablesItems:NO];
-  size_t count = api->value_list_size(val);
-  for (size_t i = 0; i < count; ++i) {
-    wef_value_t* itemVal = api->value_list_get(val, i);
-    if (!itemVal || !api->value_is_dict(itemVal))
-      continue;
-    wef_value_t* typeVal = api->value_dict_get(itemVal, "type");
-    if (typeVal && api->value_is_string(typeVal)) {
-      size_t len = 0;
-      char* typeStr = api->value_get_string(typeVal, &len);
-      if (typeStr && std::string(typeStr) == "separator") {
-        [menu addItem:[NSMenuItem separatorItem]];
-        api->value_free_string(typeStr);
-        continue;
-      }
-      if (typeStr)
-        api->value_free_string(typeStr);
-    }
-    wef_value_t* roleVal = api->value_dict_get(itemVal, "role");
-    if (roleVal && api->value_is_string(roleVal)) {
-      size_t len = 0;
-      char* roleStr = api->value_get_string(roleVal, &len);
-      if (roleStr) {
-        NSMenuItem* roleItem = CreateRoleMenuItem(roleStr);
-        if (roleItem)
-          [menu addItem:roleItem];
-        api->value_free_string(roleStr);
-        continue;
-      }
-    }
-    wef_value_t* labelVal = api->value_dict_get(itemVal, "label");
-    if (!labelVal || !api->value_is_string(labelVal))
-      continue;
-    size_t labelLen = 0;
-    char* labelStr = api->value_get_string(labelVal, &labelLen);
-    if (!labelStr)
-      continue;
-    NSString* label = [NSString stringWithUTF8String:labelStr];
-    api->value_free_string(labelStr);
-    wef_value_t* submenuVal = api->value_dict_get(itemVal, "submenu");
-    if (submenuVal && api->value_is_list(submenuVal)) {
-      NSMenuItem* submenuItem = [[NSMenuItem alloc] init];
-      [submenuItem setTitle:label];
-      NSMenu* submenu = BuildMenuFromValue(submenuVal, api, target, action);
-      [submenu setTitle:label];
-      [submenuItem setSubmenu:submenu];
-      [menu addItem:submenuItem];
-      continue;
-    }
-    NSString* keyEquiv = @"";
-    NSEventModifierFlags modMask = NSEventModifierFlagCommand;
-    wef_value_t* accelVal = api->value_dict_get(itemVal, "accelerator");
-    if (accelVal && api->value_is_string(accelVal)) {
-      size_t accelLen = 0;
-      char* accelStr = api->value_get_string(accelVal, &accelLen);
-      if (accelStr) {
-        ParseAccelerator(accelStr, &keyEquiv, &modMask);
-        api->value_free_string(accelStr);
-      }
-    }
-    NSMenuItem* nsItem = [[NSMenuItem alloc] initWithTitle:label
-                                                    action:action
-                                             keyEquivalent:keyEquiv];
-    [nsItem setKeyEquivalentModifierMask:modMask];
-    [nsItem setTarget:target];
-    wef_value_t* idVal = api->value_dict_get(itemVal, "id");
-    if (idVal && api->value_is_string(idVal)) {
-      size_t idLen = 0;
-      char* idStr = api->value_get_string(idVal, &idLen);
-      if (idStr) {
-        [nsItem setRepresentedObject:[NSString stringWithUTF8String:idStr]];
-        api->value_free_string(idStr);
-      }
-    }
-    wef_value_t* enabledVal = api->value_dict_get(itemVal, "enabled");
-    if (enabledVal && api->value_is_bool(enabledVal)) {
-      [nsItem setEnabled:api->value_get_bool(enabledVal)];
-    } else {
-      [nsItem setEnabled:YES];
-    }
-    [menu addItem:nsItem];
-  }
-  return menu;
-}
-
-// Exported function called from runtime_loader.cc on macOS
 void Backend_ShowContextMenu_Mac(void* data, uint32_t window_id, int x, int y,
                                  wef_value_t* menu_template,
                                  wef_menu_click_fn on_click,
                                  void* on_click_data) {
   if (!menu_template)
     return;
-  g_menu_click_fn = on_click;
-  g_menu_click_data = on_click_data;
   RuntimeLoader* loader = static_cast<RuntimeLoader*>(data);
   const wef_backend_api_t* api = &loader->GetBackendApi();
 
@@ -663,9 +367,8 @@ void Backend_ShowContextMenu_Mac(void* data, uint32_t window_id, int x, int y,
 
   void* handle = browser->GetHost()->GetWindowHandle();
   dispatch_async(dispatch_get_main_queue(), ^{
-    NSMenu* menu =
-        BuildMenuFromValue(menu_template, api, [WefMenuTarget shared],
-                           @selector(menuItemClicked:));
+    NSMenu* menu = wef_common::BuildNSMenuFromValue(
+        menu_template, api, on_click, on_click_data, window_id);
     if (!menu)
       return;
 
@@ -688,14 +391,11 @@ void Backend_SetApplicationMenu_Mac(void* data, uint32_t window_id,
                                     void* on_click_data) {
   if (!menu_template)
     return;
-  g_menu_click_fn = on_click;
-  g_menu_click_data = on_click_data;
   RuntimeLoader* loader = static_cast<RuntimeLoader*>(data);
   const wef_backend_api_t* api = &loader->GetBackendApi();
   dispatch_async(dispatch_get_main_queue(), ^{
-    NSMenu* menubar =
-        BuildMenuFromValue(menu_template, api, [WefMenuTarget shared],
-                           @selector(menuItemClicked:));
+    NSMenu* menubar = wef_common::BuildNSMenuFromValue(
+        menu_template, api, on_click, on_click_data, window_id);
     if (menubar) {
       EnsureEditMenu(menubar);
       // Store per-window
@@ -714,65 +414,18 @@ void Backend_SetApplicationMenu_Mac(void* data, uint32_t window_id,
 
 // --- Dock (macOS) ---
 
-// Dock menu + reopen handler storage (consumed by WefAppDelegate in
-// main_mac.mm — declared extern there).
+// Dock menu storage (consumed by WefAppDelegate in main_mac.mm — declared
+// extern there). Reopen handler also stored here for AppDelegate access.
 NSMenu* g_dock_menu = nil;
-static wef_menu_click_fn g_dock_click_fn = nullptr;
-static void* g_dock_click_data = nullptr;
 wef_dock_reopen_fn g_dock_reopen_fn = nullptr;
 void* g_dock_reopen_data = nullptr;
 
-@interface WefDockMenuTarget : NSObject
-+ (instancetype)shared;
-- (void)dockMenuItemClicked:(id)sender;
-@end
-
-@implementation WefDockMenuTarget
-
-+ (instancetype)shared {
-  static WefDockMenuTarget* instance = nil;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    instance = [[WefDockMenuTarget alloc] init];
-  });
-  return instance;
-}
-
-- (void)dockMenuItemClicked:(id)sender {
-  NSMenuItem* item = (NSMenuItem*)sender;
-  NSString* itemId = [item representedObject];
-  if (itemId && g_dock_click_fn) {
-    // window_id = 0 because dock menu is app-scoped.
-    g_dock_click_fn(g_dock_click_data, 0, [itemId UTF8String]);
-  }
-}
-
-@end
-
 void Backend_SetDockBadge_Mac(void* /*data*/, const char* badge_or_null) {
-  NSString* ns = badge_or_null && *badge_or_null
-                     ? [NSString stringWithUTF8String:badge_or_null]
-                     : nil;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    NSDockTile* tile = [NSApp dockTile];
-    [tile setBadgeLabel:ns];
-    [tile display];
-    NSRunningApplication* me = [NSRunningApplication currentApplication];
-    NSLog(@"[wef-debug] policy=%ld active=%d hidden=%d finishedLaunching=%d "
-          @"bundleURL=%@ bundleId=%@ owns_dock_tile=%d badge_after=%@",
-          (long)[NSApp activationPolicy], me.active, me.hidden,
-          me.finishedLaunching, me.bundleURL, me.bundleIdentifier,
-          (tile == [NSApp dockTile]), tile.badgeLabel);
-  });
+  wef_common::SetDockBadgeMac(badge_or_null);
 }
 
 void Backend_BounceDock_Mac(void* /*data*/, int type) {
-  NSRequestUserAttentionType t = (type == WEF_DOCK_BOUNCE_CRITICAL)
-                                     ? NSCriticalRequest
-                                     : NSInformationalRequest;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [NSApp requestUserAttention:t];
-  });
+  wef_common::BounceDockMac(type);
 }
 
 void Backend_SetDockMenu_Mac(void* data, wef_value_t* menu_template,
@@ -782,28 +435,19 @@ void Backend_SetDockMenu_Mac(void* data, wef_value_t* menu_template,
   if (!menu_template) {
     dispatch_async(dispatch_get_main_queue(), ^{
       g_dock_menu = nil;
-      g_dock_click_fn = nullptr;
-      g_dock_click_data = nullptr;
     });
     return;
   }
-  g_dock_click_fn = on_click;
-  g_dock_click_data = on_click_data;
   dispatch_async(dispatch_get_main_queue(), ^{
-    NSMenu* menu =
-        BuildMenuFromValue(menu_template, api, [WefDockMenuTarget shared],
-                           @selector(dockMenuItemClicked:));
+    // window_id = 0 because dock menu is app-scoped.
+    NSMenu* menu = wef_common::BuildNSMenuFromValue(menu_template, api,
+                                                     on_click, on_click_data, 0);
     g_dock_menu = menu;
   });
 }
 
 void Backend_SetDockVisible_Mac(void* /*data*/, bool visible) {
-  NSApplicationActivationPolicy policy =
-      visible ? NSApplicationActivationPolicyRegular
-              : NSApplicationActivationPolicyAccessory;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [NSApp setActivationPolicy:policy];
-  });
+  wef_common::SetDockVisibleMac(visible);
 }
 
 void Backend_SetDockReopenHandler_Mac(void* /*data*/,
@@ -814,617 +458,68 @@ void Backend_SetDockReopenHandler_Mac(void* /*data*/,
 }
 
 // --- Tray / status-bar icon (macOS) ---
-
-struct TrayEntry {
-  NSStatusItem* item;
-  NSMenu* menu;
-  wef_menu_click_fn menu_click_fn;
-  void* menu_click_data;
-  wef_tray_click_fn click_fn;
-  void* click_data;
-  wef_tray_click_fn dblclick_fn;
-  void* dblclick_data;
-  NSImage* light_image;
-  NSImage* dark_image;
-};
-
-static std::map<uint32_t, TrayEntry>& TrayMap() {
-  static std::map<uint32_t, TrayEntry> map;
-  return map;
-}
-
-static std::atomic<uint32_t> g_next_tray_id{1};
-
-@interface WefTrayTarget : NSObject
-+ (instancetype)shared;
-- (void)trayClicked:(id)sender;
-- (void)trayMenuItemClicked:(id)sender;
-@end
-
-@implementation WefTrayTarget
-+ (instancetype)shared {
-  static WefTrayTarget* instance = nil;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    instance = [[WefTrayTarget alloc] init];
-  });
-  return instance;
-}
-
-- (void)trayClicked:(id)sender {
-  NSStatusBarButton* button = (NSStatusBarButton*)sender;
-  NSNumber* tagObj = [button cell].representedObject;
-  if (!tagObj)
-    return;
-  uint32_t tray_id = (uint32_t)[tagObj unsignedIntValue];
-  auto& map = TrayMap();
-  auto it = map.find(tray_id);
-  if (it == map.end())
-    return;
-  NSEvent* event = [NSApp currentEvent];
-  if (event && event.type == NSEventTypeRightMouseUp && it->second.menu) {
-    [it->second.item popUpStatusItemMenu:it->second.menu];
-    return;
-  }
-  if (event && event.clickCount >= 2 && it->second.dblclick_fn) {
-    it->second.dblclick_fn(it->second.dblclick_data, tray_id);
-    return;
-  }
-  if (it->second.click_fn) {
-    it->second.click_fn(it->second.click_data, tray_id);
-  }
-}
-
-- (void)trayMenuItemClicked:(id)sender {
-  NSMenuItem* item = (NSMenuItem*)sender;
-  NSArray* pair = [item representedObject];
-  if (!pair || [pair count] != 2)
-    return;
-  NSNumber* tagObj = pair[0];
-  NSString* itemId = pair[1];
-  uint32_t tray_id = (uint32_t)[tagObj unsignedIntValue];
-  auto& map = TrayMap();
-  auto it = map.find(tray_id);
-  if (it == map.end() || !it->second.menu_click_fn)
-    return;
-  it->second.menu_click_fn(it->second.menu_click_data, tray_id,
-                           [itemId UTF8String]);
-}
-@end
-
-// Tag each tray-menu item with (tray_id, item_id) so the shared click
-// handler can route the click correctly.
-static void TagTrayMenuItems(NSMenu* menu, uint32_t tray_id) {
-  for (NSMenuItem* mi in [menu itemArray]) {
-    if ([mi hasSubmenu]) {
-      TagTrayMenuItems([mi submenu], tray_id);
-      continue;
-    }
-    if ([mi isSeparatorItem])
-      continue;
-    id rep = [mi representedObject];
-    if (![rep isKindOfClass:[NSString class]])
-      continue;
-    NSArray* pair =
-        @[ [NSNumber numberWithUnsignedInt:tray_id], (NSString*)rep ];
-    [mi setRepresentedObject:pair];
-    [mi setTarget:[WefTrayTarget shared]];
-    [mi setAction:@selector(trayMenuItemClicked:)];
-  }
-}
+//
+// Thin trampolines over backend-common/src/tray_mac.mm.
 
 uint32_t Backend_CreateTrayIcon_Mac(void* /*data*/) {
-  uint32_t tray_id = g_next_tray_id.fetch_add(1, std::memory_order_relaxed);
-  dispatch_async(dispatch_get_main_queue(), ^{
-    NSStatusItem* item = [[NSStatusBar systemStatusBar]
-        statusItemWithLength:NSSquareStatusItemLength];
-    if (!item)
-      return;
-    NSStatusBarButton* button = [item button];
-    if (button) {
-      [[button cell] setRepresentedObject:@(tray_id)];
-      [button setTarget:[WefTrayTarget shared]];
-      [button setAction:@selector(trayClicked:)];
-      [button sendActionOn:NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp];
-    }
-    TrayEntry entry = {};
-    entry.item = item;
-    TrayMap()[tray_id] = entry;
-  });
-  return tray_id;
+  return wef_common::CreateTrayIconMac();
 }
 
 void Backend_DestroyTrayIcon_Mac(void* /*data*/, uint32_t tray_id) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = TrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end())
-      return;
-    if (it->second.item) {
-      [[NSStatusBar systemStatusBar] removeStatusItem:it->second.item];
-    }
-    map.erase(it);
-  });
-}
-
-static bool SystemIsDarkMode() {
-  if (@available(macOS 10.14, *)) {
-    NSAppearance* appearance = [NSApp effectiveAppearance];
-    NSAppearanceName match = [appearance bestMatchFromAppearancesWithNames:@[
-      NSAppearanceNameAqua, NSAppearanceNameDarkAqua
-    ]];
-    return [match isEqualToString:NSAppearanceNameDarkAqua];
-  }
-  return false;
-}
-
-static void ApplyActiveIconForTray(TrayEntry& entry) {
-  if (!entry.item)
-    return;
-  bool dark = SystemIsDarkMode();
-  NSImage* chosen =
-      (dark && entry.dark_image) ? entry.dark_image : entry.light_image;
-  if (chosen)
-    [[entry.item button] setImage:chosen];
-}
-
-static NSImage* ImageFromPng(const void* bytes, size_t len) {
-  if (!bytes || len == 0)
-    return nil;
-  NSData* data = [NSData dataWithBytes:bytes length:len];
-  NSImage* image = [[NSImage alloc] initWithData:data];
-  if (!image)
-    return nil;
-  [image setSize:NSMakeSize(18, 18)];
-  // Treating the supplied PNG as a template gives the best menu-bar
-  // appearance in most cases. Users who want a full-color icon should
-  // simply not mark it as template — but our API doesn't expose that yet,
-  // so default to template for v1 (matches Electron's behavior).
-  [image setTemplate:YES];
-  return image;
-}
-
-// One-shot installer for a distributed-notification observer that fires
-// on system theme changes (light <-> dark). Re-applies every tray icon.
-static void EnsureTrayAppearanceObserver() {
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    [[NSDistributedNotificationCenter defaultCenter]
-        addObserverForName:@"AppleInterfaceThemeChangedNotification"
-                    object:nil
-                     queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification* /*n*/) {
-                  for (auto& [tid, entry] : TrayMap()) {
-                    ApplyActiveIconForTray(entry);
-                  }
-                }];
-  });
+  wef_common::DestroyTrayIconMac(tray_id);
 }
 
 void Backend_SetTrayIcon_Mac(void* /*data*/, uint32_t tray_id,
                              const void* png_bytes, size_t len) {
-  if (!png_bytes || len == 0)
-    return;
-  NSData* data = [NSData dataWithBytes:png_bytes length:len];
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = TrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end() || !it->second.item)
-      return;
-    NSImage* image = ImageFromPng([data bytes], [data length]);
-    if (!image)
-      return;
-    it->second.light_image = image;
-    EnsureTrayAppearanceObserver();
-    ApplyActiveIconForTray(it->second);
-  });
+  wef_common::SetTrayIconMac(tray_id, png_bytes, len);
 }
 
 void Backend_SetTrayIconDark_Mac(void* /*data*/, uint32_t tray_id,
                                  const void* png_bytes, size_t len) {
-  NSData* data = (png_bytes && len > 0)
-                     ? [NSData dataWithBytes:png_bytes length:len]
-                     : nil;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = TrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end() || !it->second.item)
-      return;
-    it->second.dark_image =
-        data ? ImageFromPng([data bytes], [data length]) : nil;
-    EnsureTrayAppearanceObserver();
-    ApplyActiveIconForTray(it->second);
-  });
+  wef_common::SetTrayIconDarkMac(tray_id, png_bytes, len);
 }
 
 void Backend_SetTrayTooltip_Mac(void* /*data*/, uint32_t tray_id,
                                 const char* tooltip_or_null) {
-  NSString* tip = (tooltip_or_null && *tooltip_or_null)
-                      ? [NSString stringWithUTF8String:tooltip_or_null]
-                      : nil;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = TrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end() || !it->second.item)
-      return;
-    [[it->second.item button] setToolTip:tip];
-  });
+  wef_common::SetTrayTooltipMac(tray_id, tooltip_or_null);
 }
 
 void Backend_SetTrayMenu_Mac(void* data, uint32_t tray_id,
                              wef_value_t* menu_template,
                              wef_menu_click_fn on_click, void* on_click_data) {
   RuntimeLoader* loader = static_cast<RuntimeLoader*>(data);
-  const wef_backend_api_t* api = &loader->GetBackendApi();
-  if (!menu_template) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      auto& map = TrayMap();
-      auto it = map.find(tray_id);
-      if (it == map.end())
-        return;
-      it->second.menu = nil;
-      it->second.menu_click_fn = nullptr;
-      it->second.menu_click_data = nullptr;
-    });
-    return;
-  }
-  dispatch_async(dispatch_get_main_queue(), ^{
-    NSMenu* menu =
-        BuildMenuFromValue(menu_template, api, [WefTrayTarget shared],
-                           @selector(trayMenuItemClicked:));
-    if (!menu)
-      return;
-    TagTrayMenuItems(menu, tray_id);
-    auto& map = TrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end())
-      return;
-    it->second.menu = menu;
-    it->second.menu_click_fn = on_click;
-    it->second.menu_click_data = on_click_data;
-  });
+  wef_common::SetTrayMenuMac(tray_id, menu_template, &loader->GetBackendApi(),
+                              on_click, on_click_data);
 }
 
 void Backend_SetTrayClickHandler_Mac(void* /*data*/, uint32_t tray_id,
                                      wef_tray_click_fn handler,
                                      void* user_data) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = TrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end())
-      return;
-    it->second.click_fn = handler;
-    it->second.click_data = user_data;
-  });
+  wef_common::SetTrayClickHandlerMac(tray_id, handler, user_data);
 }
 
 void Backend_SetTrayDoubleClickHandler_Mac(void* /*data*/, uint32_t tray_id,
                                            wef_tray_click_fn handler,
                                            void* user_data) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& map = TrayMap();
-    auto it = map.find(tray_id);
-    if (it == map.end())
-      return;
-    it->second.dblclick_fn = handler;
-    it->second.dblclick_data = user_data;
-  });
+  wef_common::SetTrayDoubleClickHandlerMac(tray_id, handler, user_data);
 }
 
-// --- Notifications (macOS, UNUserNotificationCenter) ---
+// --- Notifications (macOS) ---
 //
-// Uses the modern UN API (10.14+). Delivery is gated on UN authorization,
-// so the permission API (see below) reports the same state that governs
-// whether `show_notification` actually displays anything. UN requires the
-// process to run inside a bundled .app with a CFBundleIdentifier; when
-// unbundled or unauthorized, `addNotificationRequest` fails and we emit
-// a synthetic CLOSED event so callers see the lifecycle close out.
-
-struct UnNotifEntry {
-  // UN identifies requests by string. We key our own map by nid but also
-  // need the identifier to look up entries from delegate callbacks (which
-  // only know the request).
-  std::string identifier;
-  wef_notification_event_fn on_event;
-  void* user_data;
-  std::vector<std::string> action_ids;
-};
-
-// All access happens on the main queue (delegate callbacks below hop
-// there before touching these maps), so no mutex needed.
-static std::map<uint32_t, UnNotifEntry>& UnNotifMap() {
-  static std::map<uint32_t, UnNotifEntry> map;
-  return map;
-}
-
-static std::map<std::string, uint32_t>& UnIdentToNid() {
-  static std::map<std::string, uint32_t> map;
-  return map;
-}
-
-// UN requires categories to be pre-registered before content tagged with
-// that category id can be delivered. We accumulate one category per
-// unique action-list shape (keyed by the joined id/title pairs) and
-// re-set the full set whenever a new shape appears.
-static std::map<std::string, UNNotificationCategory*>& UnCategories() {
-  static std::map<std::string, UNNotificationCategory*> map;
-  return map;
-}
-
-static std::atomic<uint32_t> g_next_notif_id_mac{1};
-
-@interface WefUnDelegate : NSObject <UNUserNotificationCenterDelegate>
-+ (instancetype)shared;
-@end
-
-@implementation WefUnDelegate
-+ (instancetype)shared {
-  static WefUnDelegate* instance = nil;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    instance = [[WefUnDelegate alloc] init];
-  });
-  return instance;
-}
-
-// Foreground delivery: UN's default is to NOT present banners when the
-// app is frontmost. Override so the user sees the notification regardless
-// of activation state — matches what `new Notification(...)` does in a
-// browser. Also the place we hook for SHOWN, since UN doesn't have a
-// separate "did deliver" callback that fires in all activation states.
-- (void)userNotificationCenter:(UNUserNotificationCenter*)center
-       willPresentNotification:(UNNotification*)notification
-         withCompletionHandler:
-             (void (^)(UNNotificationPresentationOptions))completionHandler {
-  (void)center;
-  NSString* ident = notification.request.identifier;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    std::string key = [ident UTF8String];
-    auto& im = UnIdentToNid();
-    auto it = im.find(key);
-    if (it == im.end()) return;
-    auto& nm = UnNotifMap();
-    auto nit = nm.find(it->second);
-    if (nit != nm.end() && nit->second.on_event) {
-      nit->second.on_event(nit->second.user_data, it->second,
-                           WEF_NOTIFICATION_SHOWN, nullptr);
-    }
-  });
-  completionHandler(UNNotificationPresentationOptionBanner |
-                    UNNotificationPresentationOptionSound |
-                    UNNotificationPresentationOptionBadge);
-}
-
-- (void)userNotificationCenter:(UNUserNotificationCenter*)center
-    didReceiveNotificationResponse:(UNNotificationResponse*)response
-             withCompletionHandler:(void (^)(void))completionHandler {
-  (void)center;
-  NSString* ident = response.notification.request.identifier;
-  NSString* actId = response.actionIdentifier;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    std::string key = [ident UTF8String];
-    auto& im = UnIdentToNid();
-    auto it = im.find(key);
-    if (it == im.end()) return;
-    auto& nm = UnNotifMap();
-    auto nit = nm.find(it->second);
-    if (nit == nm.end() || !nit->second.on_event) return;
-    if ([actId isEqualToString:UNNotificationDefaultActionIdentifier]) {
-      // The user clicked the notification body (not an action button).
-      nit->second.on_event(nit->second.user_data, it->second,
-                           WEF_NOTIFICATION_CLICKED, nullptr);
-    } else if ([actId
-                   isEqualToString:UNNotificationDismissActionIdentifier]) {
-      // User explicitly dismissed (Close button on the banner). Requires
-      // the category to opt in via UNNotificationCategoryOptionCustomDismissAction.
-      nit->second.on_event(nit->second.user_data, it->second,
-                           WEF_NOTIFICATION_CLOSED, nullptr);
-    } else {
-      std::string aid = [actId UTF8String];
-      nit->second.on_event(nit->second.user_data, it->second,
-                           WEF_NOTIFICATION_ACTION, aid.c_str());
-    }
-  });
-  completionHandler();
-}
-@end
-
-static void EnsureUnDelegate() {
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    [UNUserNotificationCenter currentNotificationCenter].delegate =
-        [WefUnDelegate shared];
-  });
-}
-
-// Helper: read a string field out of a wef_value_t dict.
-static std::string ReadDictString(const wef_backend_api_t* api,
-                                  wef_value_t* dict, const char* key) {
-  wef_value_t* v = api->value_dict_get(dict, key);
-  if (!v || !api->value_is_string(v)) return std::string();
-  size_t len = 0;
-  char* s = api->value_get_string(v, &len);
-  if (!s) return std::string();
-  std::string out(s, len);
-  api->value_free_string(s);
-  return out;
-}
-
-static bool ReadDictBool(const wef_backend_api_t* api, wef_value_t* dict,
-                         const char* key, bool dfl) {
-  wef_value_t* v = api->value_dict_get(dict, key);
-  if (!v || !api->value_is_bool(v)) return dfl;
-  return api->value_get_bool(v);
-}
-
-// Register a category for the given action set if we haven't seen this
-// shape before. Returns the category identifier to assign to content.
-// Must be called on the main queue.
-static NSString* RegisterCategoryIfNeeded(
-    const std::vector<std::pair<std::string, std::string>>& actions) {
-  if (actions.empty()) return nil;
-  std::string key;
-  for (auto& a : actions) {
-    key += a.first;
-    key += '\x1f';
-    key += a.second;
-    key += '\x1e';
-  }
-  auto& cats = UnCategories();
-  auto it = cats.find(key);
-  if (it != cats.end()) return it->second.identifier;
-  NSString* catId =
-      [NSString stringWithFormat:@"wef.cat.%lu", (unsigned long)cats.size()];
-  NSMutableArray<UNNotificationAction*>* arr = [NSMutableArray array];
-  for (auto& a : actions) {
-    UNNotificationAction* act = [UNNotificationAction
-        actionWithIdentifier:[NSString stringWithUTF8String:a.first.c_str()]
-                       title:[NSString stringWithUTF8String:a.second.c_str()]
-                     options:UNNotificationActionOptionForeground];
-    [arr addObject:act];
-  }
-  UNNotificationCategory* cat = [UNNotificationCategory
-        categoryWithIdentifier:catId
-                       actions:arr
-             intentIdentifiers:@[]
-                       options:UNNotificationCategoryOptionCustomDismissAction];
-  cats[key] = cat;
-  NSMutableSet<UNNotificationCategory*>* all = [NSMutableSet set];
-  for (auto& kv : cats) [all addObject:kv.second];
-  [[UNUserNotificationCenter currentNotificationCenter]
-      setNotificationCategories:all];
-  return catId;
-}
+// Thin trampolines over backend-common/src/notifications_mac.mm
+// (UNUserNotificationCenter-backed).
 
 uint32_t Backend_ShowNotification_Mac(void* data, wef_value_t* options,
                                       wef_notification_event_fn on_event,
                                       void* user_data) {
-  if (!options) return 0;
   RuntimeLoader* loader = static_cast<RuntimeLoader*>(data);
-  const wef_backend_api_t* api = &loader->GetBackendApi();
-  if (!api->value_is_dict(options)) {
-    api->value_free(options);
-    return 0;
-  }
-
-  std::string title = ReadDictString(api, options, "title");
-  std::string body = ReadDictString(api, options, "body");
-  std::string tag = ReadDictString(api, options, "tag");
-  bool silent = ReadDictBool(api, options, "silent", false);
-
-  std::vector<std::pair<std::string, std::string>> actions;
-  wef_value_t* actions_val = api->value_dict_get(options, "actions");
-  if (actions_val && api->value_is_list(actions_val)) {
-    size_t n = api->value_list_size(actions_val);
-    for (size_t i = 0; i < n; ++i) {
-      wef_value_t* a = api->value_list_get(actions_val, i);
-      if (!a || !api->value_is_dict(a)) continue;
-      std::string aid = ReadDictString(api, a, "id");
-      std::string atitle = ReadDictString(api, a, "title");
-      if (!aid.empty() && !atitle.empty()) {
-        actions.emplace_back(aid, atitle);
-      }
-    }
-  }
-
-  api->value_free(options);
-
-  uint32_t nid = g_next_notif_id_mac.fetch_add(1, std::memory_order_relaxed);
-
-  // UN identifies requests by string. Tag (if given) acts as the
-  // identifier so `add` with the same tag replaces the live notification
-  // — matches the Web Notifications "tag" semantics. Without a tag we
-  // synthesize a unique id from our nid.
-  std::string identifier =
-      tag.empty() ? std::string("wef.notif.") + std::to_string(nid) : tag;
-
-  NSString* nsTitle = [NSString stringWithUTF8String:title.c_str()];
-  NSString* nsBody = [NSString stringWithUTF8String:body.c_str()];
-  NSString* nsIdent = [NSString stringWithUTF8String:identifier.c_str()];
-
-  std::vector<std::string> action_ids;
-  action_ids.reserve(actions.size());
-  for (auto& a : actions) action_ids.push_back(a.first);
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    EnsureUnDelegate();
-    UNUserNotificationCenter* center =
-        [UNUserNotificationCenter currentNotificationCenter];
-
-    // If we're reusing a tag, the old nid->entry mapping is stale.
-    // UN will replace the delivered notification automatically, but our
-    // bookkeeping needs a fresh nid keyed off the same identifier.
-    auto& im = UnIdentToNid();
-    auto prev = im.find(identifier);
-    if (prev != im.end()) {
-      UnNotifMap().erase(prev->second);
-      im.erase(prev);
-    }
-
-    NSString* catId = RegisterCategoryIfNeeded(actions);
-
-    UNMutableNotificationContent* content =
-        [[UNMutableNotificationContent alloc] init];
-    content.title = nsTitle;
-    content.body = nsBody;
-    if (!silent) content.sound = [UNNotificationSound defaultSound];
-    if (catId) content.categoryIdentifier = catId;
-
-    UNNotificationRequest* req =
-        [UNNotificationRequest requestWithIdentifier:nsIdent
-                                             content:content
-                                             trigger:nil];
-
-    UnNotifEntry entry = {};
-    entry.identifier = identifier;
-    entry.on_event = on_event;
-    entry.user_data = user_data;
-    entry.action_ids = action_ids;
-    UnNotifMap()[nid] = entry;
-    UnIdentToNid()[identifier] = nid;
-
-    [center addNotificationRequest:req
-             withCompletionHandler:^(NSError* error) {
-               if (!error) return;
-               // Most common failures: process not bundled, or
-               // authorizationStatus != authorized. There's no spec
-               // event for "never showed", so we collapse it into
-               // CLOSED — the JS Notification spec also fires
-               // "error" + "close" in that order, but the wef ABI
-               // only has CLOSED in this list.
-               dispatch_async(dispatch_get_main_queue(), ^{
-                 auto& nm = UnNotifMap();
-                 auto nit = nm.find(nid);
-                 if (nit == nm.end()) return;
-                 wef_notification_event_fn cb = nit->second.on_event;
-                 void* ud = nit->second.user_data;
-                 UnIdentToNid().erase(nit->second.identifier);
-                 nm.erase(nit);
-                 if (cb) cb(ud, nid, WEF_NOTIFICATION_CLOSED, nullptr);
-               });
-             }];
-  });
-
-  return nid;
+  wef_common::NotificationOptions opts =
+      wef_common::ParseNotificationOptions(options, &loader->GetBackendApi());
+  return wef_common::ShowNotificationMac(opts, on_event, user_data);
 }
 
 void Backend_CloseNotification_Mac(void* /*data*/, uint32_t notification_id) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    auto& nm = UnNotifMap();
-    auto it = nm.find(notification_id);
-    if (it == nm.end()) return;
-    std::string ident = it->second.identifier;
-    wef_notification_event_fn cb = it->second.on_event;
-    void* ud = it->second.user_data;
-    NSString* nsIdent = [NSString stringWithUTF8String:ident.c_str()];
-    UNUserNotificationCenter* center =
-        [UNUserNotificationCenter currentNotificationCenter];
-    [center removeDeliveredNotificationsWithIdentifiers:@[ nsIdent ]];
-    [center removePendingNotificationRequestsWithIdentifiers:@[ nsIdent ]];
-    UnIdentToNid().erase(ident);
-    nm.erase(it);
-    if (cb) cb(ud, notification_id, WEF_NOTIFICATION_CLOSED, nullptr);
-  });
+  wef_common::CloseNotificationMac(notification_id);
 }
 
 // --- Permissions (UNUserNotificationCenter) ---
@@ -1436,100 +531,18 @@ void Backend_CloseNotification_Mac(void* /*data*/, uint32_t notification_id) {
 // fails immediately. We detect that case and report UNSUPPORTED so the
 // embedder (Deno) can branch on it instead of seeing a phantom DENIED.
 
-static int MapUNStatus(UNAuthorizationStatus s) {
-  switch (s) {
-    case UNAuthorizationStatusNotDetermined:
-      return WEF_PERMISSION_STATUS_PROMPT;
-    case UNAuthorizationStatusDenied:
-      return WEF_PERMISSION_STATUS_DENIED;
-    case UNAuthorizationStatusAuthorized:
-    case UNAuthorizationStatusProvisional:
-      return WEF_PERMISSION_STATUS_GRANTED;
-    default:
-      return WEF_PERMISSION_STATUS_UNSUPPORTED;
-  }
-}
-
-static bool MacProcessIsBundled() {
-  NSBundle* mb = [NSBundle mainBundle];
-  if (!mb)
-    return false;
-  if (![mb bundleIdentifier])
-    return false;
-  // Reject the synthetic bundle `cargo run` etc. produces for a bare
-  // exe (path doesn't end in .app).
-  NSString* path = [mb bundlePath];
-  return path && [path hasSuffix:@".app"];
-}
-
-static void FirePermissionOnMain(wef_permission_callback_fn cb, void* ud,
-                                 int status) {
-  if (!cb)
-    return;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    cb(ud, status);
-  });
-}
+// --- Permissions (macOS) ---
+//
+// Thin trampolines over backend-common/src/permissions_mac.mm.
 
 void Backend_QueryPermission_Mac(void* /*data*/, int kind,
                                  wef_permission_callback_fn cb,
                                  void* user_data) {
-  if (kind != WEF_PERMISSION_NOTIFICATIONS) {
-    FirePermissionOnMain(cb, user_data, WEF_PERMISSION_STATUS_UNSUPPORTED);
-    return;
-  }
-  if (!MacProcessIsBundled()) {
-    FirePermissionOnMain(cb, user_data, WEF_PERMISSION_STATUS_UNSUPPORTED);
-    return;
-  }
-  UNUserNotificationCenter* center =
-      [UNUserNotificationCenter currentNotificationCenter];
-  [center getNotificationSettingsWithCompletionHandler:^(
-              UNNotificationSettings* settings) {
-    int status = MapUNStatus(settings.authorizationStatus);
-    FirePermissionOnMain(cb, user_data, status);
-  }];
+  wef_common::QueryPermissionMac(kind, cb, user_data);
 }
 
 void Backend_RequestPermission_Mac(void* /*data*/, int kind,
                                    wef_permission_callback_fn cb,
                                    void* user_data) {
-  if (kind != WEF_PERMISSION_NOTIFICATIONS) {
-    FirePermissionOnMain(cb, user_data, WEF_PERMISSION_STATUS_UNSUPPORTED);
-    return;
-  }
-  if (!MacProcessIsBundled()) {
-    FirePermissionOnMain(cb, user_data, WEF_PERMISSION_STATUS_UNSUPPORTED);
-    return;
-  }
-  UNUserNotificationCenter* center =
-      [UNUserNotificationCenter currentNotificationCenter];
-  UNAuthorizationOptions opts = UNAuthorizationOptionAlert |
-                                 UNAuthorizationOptionSound |
-                                 UNAuthorizationOptionBadge;
-  [center requestAuthorizationWithOptions:opts
-                        completionHandler:^(BOOL granted, NSError* error) {
-                          (void)error;
-                          // After the user picks, fetch the real status -
-                          // `granted` is BOOL but the cached state can be
-                          // PROVISIONAL or EPHEMERAL which we still want
-                          // mapped through MapUNStatus.
-                          [center getNotificationSettingsWithCompletionHandler:^(
-                                      UNNotificationSettings* settings) {
-                            int status;
-                            if (granted) {
-                              status = MapUNStatus(settings.authorizationStatus);
-                            } else {
-                              // The OS rejected; map by current settings
-                              // (NotDetermined collapses to DENIED here
-                              // because the request was rejected).
-                              status = (settings.authorizationStatus ==
-                                        UNAuthorizationStatusNotDetermined)
-                                           ? WEF_PERMISSION_STATUS_DENIED
-                                           : MapUNStatus(
-                                                 settings.authorizationStatus);
-                            }
-                            FirePermissionOnMain(cb, user_data, status);
-                          }];
-                        }];
+  wef_common::RequestPermissionMac(kind, cb, user_data);
 }

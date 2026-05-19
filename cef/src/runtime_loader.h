@@ -446,15 +446,4 @@ void SetLinuxWindowResizable(unsigned long xid, bool resizable);
 bool IsLinuxWindowResizable(unsigned long xid);
 #endif
 
-#ifdef __APPLE__
-// Show a native dialog (alert/confirm/prompt) on macOS (implemented in
-// runtime_loader_mac.mm). Blocks until the user dismisses it. Returns 1
-// if OK was pressed, 0 otherwise. For prompts, on a confirmed result
-// `*out_input_value` is set to a `strdup`'d UTF-8 string the caller frees
-// via `Backend_StringFree`.
-int ShowNativeDialog_Mac(int dialog_type, const char* title,
-                         const char* message, const char* default_value,
-                         char** out_input_value);
-#endif
-
 #endif

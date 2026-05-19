@@ -1,6 +1,7 @@
 // Copyright 2025 Divy Srivastava. All rights reserved. MIT license.
 
 #include "runtime_loader.h"
+#include "wef_backend_common.h"
 #include "wef_json.h"
 
 #include <gtk/gtk.h>
@@ -49,280 +50,13 @@ static void gtk_invoke_sync(F&& fn) {
 
 namespace keyboard {
 
-std::string GdkKeyvalToKey(guint keyval) {
-  switch (keyval) {
-    case GDK_KEY_BackSpace:
-      return "Backspace";
-    case GDK_KEY_Tab:
-    case GDK_KEY_ISO_Left_Tab:
-      return "Tab";
-    case GDK_KEY_Return:
-    case GDK_KEY_KP_Enter:
-      return "Enter";
-    case GDK_KEY_Escape:
-      return "Escape";
-    case GDK_KEY_space:
-      return " ";
-    case GDK_KEY_Delete:
-    case GDK_KEY_KP_Delete:
-      return "Delete";
-    case GDK_KEY_Insert:
-    case GDK_KEY_KP_Insert:
-      return "Insert";
-    case GDK_KEY_Home:
-    case GDK_KEY_KP_Home:
-      return "Home";
-    case GDK_KEY_End:
-    case GDK_KEY_KP_End:
-      return "End";
-    case GDK_KEY_Page_Up:
-    case GDK_KEY_KP_Page_Up:
-      return "PageUp";
-    case GDK_KEY_Page_Down:
-    case GDK_KEY_KP_Page_Down:
-      return "PageDown";
-    case GDK_KEY_Left:
-    case GDK_KEY_KP_Left:
-      return "ArrowLeft";
-    case GDK_KEY_Right:
-    case GDK_KEY_KP_Right:
-      return "ArrowRight";
-    case GDK_KEY_Up:
-    case GDK_KEY_KP_Up:
-      return "ArrowUp";
-    case GDK_KEY_Down:
-    case GDK_KEY_KP_Down:
-      return "ArrowDown";
-    case GDK_KEY_Shift_L:
-    case GDK_KEY_Shift_R:
-      return "Shift";
-    case GDK_KEY_Control_L:
-    case GDK_KEY_Control_R:
-      return "Control";
-    case GDK_KEY_Alt_L:
-    case GDK_KEY_Alt_R:
-      return "Alt";
-    case GDK_KEY_Meta_L:
-    case GDK_KEY_Meta_R:
-    case GDK_KEY_Super_L:
-    case GDK_KEY_Super_R:
-      return "Meta";
-    case GDK_KEY_Caps_Lock:
-      return "CapsLock";
-    case GDK_KEY_Num_Lock:
-      return "NumLock";
-    case GDK_KEY_Scroll_Lock:
-      return "ScrollLock";
-    case GDK_KEY_F1:
-      return "F1";
-    case GDK_KEY_F2:
-      return "F2";
-    case GDK_KEY_F3:
-      return "F3";
-    case GDK_KEY_F4:
-      return "F4";
-    case GDK_KEY_F5:
-      return "F5";
-    case GDK_KEY_F6:
-      return "F6";
-    case GDK_KEY_F7:
-      return "F7";
-    case GDK_KEY_F8:
-      return "F8";
-    case GDK_KEY_F9:
-      return "F9";
-    case GDK_KEY_F10:
-      return "F10";
-    case GDK_KEY_F11:
-      return "F11";
-    case GDK_KEY_F12:
-      return "F12";
-    case GDK_KEY_Pause:
-      return "Pause";
-    default: {
-      guint32 uc = gdk_keyval_to_unicode(keyval);
-      if (uc > 0 && g_unichar_isprint(uc)) {
-        char buf[7];
-        int len = g_unichar_to_utf8(uc, buf);
-        buf[len] = '\0';
-        return std::string(buf);
-      }
-      return "Unidentified";
-    }
-  }
+// GDK → W3C key/code lives in backend-common
+// (wef_common::GdkKeyvalToKey / GdkKeycodeToCode).
+inline std::string GdkKeyvalToKey(guint keyval) {
+  return wef_common::GdkKeyvalToKey(keyval);
 }
-
-std::string GdkKeycodeToCode(guint16 hardware_keycode) {
-  switch (hardware_keycode) {
-    case 9:
-      return "Escape";
-    case 10:
-      return "Digit1";
-    case 11:
-      return "Digit2";
-    case 12:
-      return "Digit3";
-    case 13:
-      return "Digit4";
-    case 14:
-      return "Digit5";
-    case 15:
-      return "Digit6";
-    case 16:
-      return "Digit7";
-    case 17:
-      return "Digit8";
-    case 18:
-      return "Digit9";
-    case 19:
-      return "Digit0";
-    case 20:
-      return "Minus";
-    case 21:
-      return "Equal";
-    case 22:
-      return "Backspace";
-    case 23:
-      return "Tab";
-    case 24:
-      return "KeyQ";
-    case 25:
-      return "KeyW";
-    case 26:
-      return "KeyE";
-    case 27:
-      return "KeyR";
-    case 28:
-      return "KeyT";
-    case 29:
-      return "KeyY";
-    case 30:
-      return "KeyU";
-    case 31:
-      return "KeyI";
-    case 32:
-      return "KeyO";
-    case 33:
-      return "KeyP";
-    case 34:
-      return "BracketLeft";
-    case 35:
-      return "BracketRight";
-    case 36:
-      return "Enter";
-    case 37:
-      return "ControlLeft";
-    case 38:
-      return "KeyA";
-    case 39:
-      return "KeyS";
-    case 40:
-      return "KeyD";
-    case 41:
-      return "KeyF";
-    case 42:
-      return "KeyG";
-    case 43:
-      return "KeyH";
-    case 44:
-      return "KeyJ";
-    case 45:
-      return "KeyK";
-    case 46:
-      return "KeyL";
-    case 47:
-      return "Semicolon";
-    case 48:
-      return "Quote";
-    case 49:
-      return "Backquote";
-    case 50:
-      return "ShiftLeft";
-    case 51:
-      return "Backslash";
-    case 52:
-      return "KeyZ";
-    case 53:
-      return "KeyX";
-    case 54:
-      return "KeyC";
-    case 55:
-      return "KeyV";
-    case 56:
-      return "KeyB";
-    case 57:
-      return "KeyN";
-    case 58:
-      return "KeyM";
-    case 59:
-      return "Comma";
-    case 60:
-      return "Period";
-    case 61:
-      return "Slash";
-    case 62:
-      return "ShiftRight";
-    case 64:
-      return "AltLeft";
-    case 65:
-      return "Space";
-    case 66:
-      return "CapsLock";
-    case 67:
-      return "F1";
-    case 68:
-      return "F2";
-    case 69:
-      return "F3";
-    case 70:
-      return "F4";
-    case 71:
-      return "F5";
-    case 72:
-      return "F6";
-    case 73:
-      return "F7";
-    case 74:
-      return "F8";
-    case 75:
-      return "F9";
-    case 76:
-      return "F10";
-    case 95:
-      return "F11";
-    case 96:
-      return "F12";
-    case 105:
-      return "ControlRight";
-    case 108:
-      return "AltRight";
-    case 110:
-      return "Home";
-    case 111:
-      return "ArrowUp";
-    case 112:
-      return "PageUp";
-    case 113:
-      return "ArrowLeft";
-    case 114:
-      return "ArrowRight";
-    case 115:
-      return "End";
-    case 116:
-      return "ArrowDown";
-    case 117:
-      return "PageDown";
-    case 118:
-      return "Insert";
-    case 119:
-      return "Delete";
-    case 133:
-      return "MetaLeft";
-    case 134:
-      return "MetaRight";
-    default:
-      return "Unidentified";
-  }
+inline std::string GdkKeycodeToCode(guint16 hardware_keycode) {
+  return wef_common::GdkKeycodeToCode(hardware_keycode);
 }
 
 uint32_t GdkModifiersToWef(guint state) {
@@ -634,14 +368,11 @@ class WebKitGTKBackend : public WefBackend {
   // libnotify / notify-send have no permission model — always granted.
   void QueryPermission(int kind, wef_permission_callback_fn cb,
                        void* user_data) override {
-    if (cb)
-      cb(user_data, kind == WEF_PERMISSION_NOTIFICATIONS
-                        ? WEF_PERMISSION_STATUS_GRANTED
-                        : WEF_PERMISSION_STATUS_UNSUPPORTED);
+    wef_common::QueryPermissionStub(kind, cb, user_data);
   }
   void RequestPermission(int kind, wef_permission_callback_fn cb,
                          void* user_data) override {
-    QueryPermission(kind, cb, user_data);
+    wef_common::RequestPermissionStub(kind, cb, user_data);
   }
 
   void HandleJsMessage(uint32_t window_id, const char* json);
@@ -1316,161 +1047,10 @@ void WebKitGTKBackend::HandleJsMessage(uint32_t window_id,
 }
 
 // ============================================================================
-// Application Menu
+// Application Menu / Context Menu
 // ============================================================================
-
-struct GtkMenuCallbackData {
-  wef_menu_click_fn on_click;
-  void* on_click_data;
-  uint32_t window_id;
-  std::string item_id;
-};
-
-static void on_gtk_menu_item_activate(GtkMenuItem* /*item*/,
-                                      gpointer user_data) {
-  auto* data = static_cast<GtkMenuCallbackData*>(user_data);
-  if (data->on_click) {
-    data->on_click(data->on_click_data, data->window_id, data->item_id.c_str());
-  }
-}
-
-static void on_gtk_menu_item_destroy(gpointer user_data,
-                                     GClosure* /*closure*/) {
-  delete static_cast<GtkMenuCallbackData*>(user_data);
-}
-
-static GtkWidget* BuildGtkMenuFromValue(wef_value_t* val,
-                                        const wef_backend_api_t* api,
-                                        uint32_t window_id,
-                                        wef_menu_click_fn on_click,
-                                        void* on_click_data, bool is_menu_bar) {
-  if (!val || !api->value_is_list(val))
-    return nullptr;
-
-  GtkWidget* menu = is_menu_bar ? gtk_menu_bar_new() : gtk_menu_new();
-  size_t count = api->value_list_size(val);
-
-  for (size_t i = 0; i < count; ++i) {
-    wef_value_t* itemVal = api->value_list_get(val, i);
-    if (!itemVal || !api->value_is_dict(itemVal))
-      continue;
-
-    // Separator
-    wef_value_t* typeVal = api->value_dict_get(itemVal, "type");
-    if (typeVal && api->value_is_string(typeVal)) {
-      size_t len = 0;
-      char* typeStr = api->value_get_string(typeVal, &len);
-      if (typeStr && std::string(typeStr) == "separator") {
-        gtk_menu_shell_append(GTK_MENU_SHELL(menu),
-                              gtk_separator_menu_item_new());
-        api->value_free_string(typeStr);
-        continue;
-      }
-      if (typeStr)
-        api->value_free_string(typeStr);
-    }
-
-    // Role-based items (map to labels; GTK doesn't have built-in roles)
-    wef_value_t* roleVal = api->value_dict_get(itemVal, "role");
-    if (roleVal && api->value_is_string(roleVal)) {
-      size_t len = 0;
-      char* roleStr = api->value_get_string(roleVal, &len);
-      if (roleStr) {
-        std::string role = roleStr;
-        api->value_free_string(roleStr);
-
-        // Map roles to labels
-        std::string label;
-        if (role == "quit")
-          label = "Quit";
-        else if (role == "copy")
-          label = "Copy";
-        else if (role == "paste")
-          label = "Paste";
-        else if (role == "cut")
-          label = "Cut";
-        else if (role == "selectall" || role == "selectAll")
-          label = "Select All";
-        else if (role == "undo")
-          label = "Undo";
-        else if (role == "redo")
-          label = "Redo";
-        else if (role == "minimize")
-          label = "Minimize";
-        else if (role == "close")
-          label = "Close";
-        else if (role == "about")
-          label = "About";
-        else if (role == "togglefullscreen" || role == "toggleFullScreen")
-          label = "Toggle Full Screen";
-
-        if (!label.empty()) {
-          GtkWidget* item = gtk_menu_item_new_with_label(label.c_str());
-          auto* cb_data =
-              new GtkMenuCallbackData{on_click, on_click_data, window_id, role};
-          g_signal_connect_data(item, "activate",
-                                G_CALLBACK(on_gtk_menu_item_activate), cb_data,
-                                on_gtk_menu_item_destroy, (GConnectFlags)0);
-          gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
-        }
-        continue;
-      }
-    }
-
-    // Label
-    wef_value_t* labelVal = api->value_dict_get(itemVal, "label");
-    if (!labelVal || !api->value_is_string(labelVal))
-      continue;
-    size_t labelLen = 0;
-    char* labelStr = api->value_get_string(labelVal, &labelLen);
-    if (!labelStr)
-      continue;
-    std::string label = labelStr;
-    api->value_free_string(labelStr);
-
-    // Submenu
-    wef_value_t* submenuVal = api->value_dict_get(itemVal, "submenu");
-    if (submenuVal && api->value_is_list(submenuVal)) {
-      GtkWidget* submenuItem = gtk_menu_item_new_with_label(label.c_str());
-      GtkWidget* submenu = BuildGtkMenuFromValue(
-          submenuVal, api, window_id, on_click, on_click_data, false);
-      if (submenu) {
-        gtk_menu_item_set_submenu(GTK_MENU_ITEM(submenuItem), submenu);
-      }
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), submenuItem);
-      continue;
-    }
-
-    // Regular clickable item
-    GtkWidget* gtkItem = gtk_menu_item_new_with_label(label.c_str());
-
-    std::string itemId;
-    wef_value_t* idVal = api->value_dict_get(itemVal, "id");
-    if (idVal && api->value_is_string(idVal)) {
-      size_t idLen = 0;
-      char* idStr = api->value_get_string(idVal, &idLen);
-      if (idStr) {
-        itemId = idStr;
-        api->value_free_string(idStr);
-      }
-    }
-
-    auto* cb_data = new GtkMenuCallbackData{on_click, on_click_data, window_id,
-                                            itemId.empty() ? label : itemId};
-    g_signal_connect_data(gtkItem, "activate",
-                          G_CALLBACK(on_gtk_menu_item_activate), cb_data,
-                          on_gtk_menu_item_destroy, (GConnectFlags)0);
-
-    wef_value_t* enabledVal = api->value_dict_get(itemVal, "enabled");
-    if (enabledVal && api->value_is_bool(enabledVal)) {
-      gtk_widget_set_sensitive(gtkItem, api->value_get_bool(enabledVal));
-    }
-
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtkItem);
-  }
-
-  return menu;
-}
+//
+// Menu construction lives in backend-common (wef_common::BuildGtkMenuFromValue).
 
 void WebKitGTKBackend::SetApplicationMenu(uint32_t window_id,
                                           wef_value_t* menu_template,
@@ -1490,8 +1070,8 @@ void WebKitGTKBackend::SetApplicationMenu(uint32_t window_id,
     state->menu_bar = nullptr;
   }
 
-  GtkWidget* menu_bar = BuildGtkMenuFromValue(menu_template, api, window_id,
-                                              on_click, on_click_data, true);
+  GtkWidget* menu_bar = wef_common::BuildGtkMenuFromValue(
+      menu_template, api, window_id, on_click, on_click_data, true);
   if (menu_bar) {
     // Pack menu bar at the top (before the webview)
     gtk_box_pack_start(GTK_BOX(state->vbox), menu_bar, FALSE, FALSE, 0);
@@ -1501,11 +1081,7 @@ void WebKitGTKBackend::SetApplicationMenu(uint32_t window_id,
   }
 }
 
-// ============================================================================
-// Context Menu
-// ============================================================================
-
-void WebKitGTKBackend::ShowContextMenu(uint32_t window_id, int x, int y,
+void WebKitGTKBackend::ShowContextMenu(uint32_t window_id, int /*x*/, int /*y*/,
                                        wef_value_t* menu_template,
                                        const wef_backend_api_t* api,
                                        wef_menu_click_fn on_click,
@@ -1513,8 +1089,8 @@ void WebKitGTKBackend::ShowContextMenu(uint32_t window_id, int x, int y,
   if (!menu_template)
     return;
 
-  GtkWidget* menu = BuildGtkMenuFromValue(menu_template, api, window_id,
-                                          on_click, on_click_data, false);
+  GtkWidget* menu = wef_common::BuildGtkMenuFromValue(
+      menu_template, api, window_id, on_click, on_click_data, false);
   if (!menu)
     return;
 
@@ -1540,62 +1116,13 @@ void WebKitGTKBackend::OpenDevTools(uint32_t window_id) {
 // Dialog
 // ============================================================================
 
-int WebKitGTKBackend::ShowDialog(uint32_t window_id, int dialog_type,
+int WebKitGTKBackend::ShowDialog(uint32_t /*window_id*/, int dialog_type,
                                  const std::string& title,
                                  const std::string& message,
                                  const std::string& default_value,
                                  char** out_input_value) {
-  if (out_input_value)
-    *out_input_value = nullptr;
-  GtkWindow* parent = nullptr;
-  auto* win = GetWindow(window_id);
-  if (win && win->window)
-    parent = GTK_WINDOW(win->window);
-
-  if (dialog_type == WEF_DIALOG_ALERT) {
-    GtkWidget* dialog =
-        gtk_message_dialog_new(parent, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO,
-                               GTK_BUTTONS_OK, "%s", message.c_str());
-    gtk_window_set_title(GTK_WINDOW(dialog), title.c_str());
-    gtk_dialog_run(GTK_DIALOG(dialog));
-    gtk_widget_destroy(dialog);
-    return 1;
-  } else if (dialog_type == WEF_DIALOG_CONFIRM) {
-    GtkWidget* dialog =
-        gtk_message_dialog_new(parent, GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
-                               GTK_BUTTONS_OK_CANCEL, "%s", message.c_str());
-    gtk_window_set_title(GTK_WINDOW(dialog), title.c_str());
-    gint result = gtk_dialog_run(GTK_DIALOG(dialog));
-    gtk_widget_destroy(dialog);
-    return (result == GTK_RESPONSE_OK) ? 1 : 0;
-  } else if (dialog_type == WEF_DIALOG_PROMPT) {
-    GtkWidget* dialog = gtk_dialog_new_with_buttons(
-        title.c_str(), parent,
-        (GtkDialogFlags)(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
-        "_Cancel", GTK_RESPONSE_CANCEL, "_OK", GTK_RESPONSE_OK, nullptr);
-    GtkWidget* content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-    GtkWidget* label = gtk_label_new(message.c_str());
-    gtk_container_add(GTK_CONTAINER(content), label);
-    GtkWidget* entry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(entry), default_value.c_str());
-    gtk_container_add(GTK_CONTAINER(content), entry);
-    gtk_widget_show_all(dialog);
-    gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_OK);
-    gtk_entry_set_activates_default(GTK_ENTRY(entry), TRUE);
-
-    gint result = gtk_dialog_run(GTK_DIALOG(dialog));
-    const gchar* text = gtk_entry_get_text(GTK_ENTRY(entry));
-    std::string result_text = text ? text : "";
-    gtk_widget_destroy(dialog);
-
-    if (result == GTK_RESPONSE_OK) {
-      if (out_input_value)
-        *out_input_value = strdup(result_text.c_str());
-      return 1;
-    }
-    return 0;
-  }
-  return 0;
+  return wef_common::ShowDialogLinux(dialog_type, title, message, default_value,
+                                     out_input_value);
 }
 
 // ============================================================================
@@ -1648,358 +1175,52 @@ void WebKitGTKBackend::SetDockBadge(const char* badge_or_null) {
 // Tray / status bar (Linux) — libappindicator if available
 // ============================================================================
 
-#ifdef WEF_HAVE_APPINDICATOR
-extern "C" {
-#include <libappindicator/app-indicator.h>
-}
-
-namespace {
-struct LinuxTrayEntry {
-  AppIndicator* indicator;
-  GtkWidget* menu;
-  // Map from dynamically-allocated item command id strings (we use a
-  // counter) back to the user-space menu item id.
-  std::map<std::string, std::string> cmd_to_id;
-  wef_menu_click_fn menu_click_fn;
-  void* menu_click_data;
-  wef_tray_click_fn click_fn;  // unused on Linux — AppIndicator has no
-  void* click_data;            // left-click; left-click shows the menu.
-};
-std::mutex g_linux_tray_mutex;
-std::map<uint32_t, LinuxTrayEntry> g_linux_trays;
-std::atomic<uint32_t> g_linux_next_tray_id{1};
-std::atomic<uint64_t> g_linux_next_cmd{1};
-
-struct MenuActivateCtx {
-  uint32_t tray_id;
-  std::string item_id;
-};
-
-void OnLinuxTrayMenuActivate(GtkMenuItem* /*item*/, gpointer user_data) {
-  auto* ctx = static_cast<MenuActivateCtx*>(user_data);
-  wef_menu_click_fn fn = nullptr;
-  void* data = nullptr;
-  {
-    std::lock_guard<std::mutex> lock(g_linux_tray_mutex);
-    auto it = g_linux_trays.find(ctx->tray_id);
-    if (it != g_linux_trays.end()) {
-      fn = it->second.menu_click_fn;
-      data = it->second.menu_click_data;
-    }
-  }
-  if (fn)
-    fn(data, ctx->tray_id, ctx->item_id.c_str());
-}
-
-void DestroyMenuActivateCtx(gpointer data, GClosure* /*closure*/) {
-  delete static_cast<MenuActivateCtx*>(data);
-}
-
-GtkWidget* BuildLinuxTrayMenu(uint32_t tray_id, wef_value_t* val,
-                              const wef_backend_api_t* api) {
-  if (!val || !api->value_is_list(val))
-    return nullptr;
-  GtkWidget* menu = gtk_menu_new();
-  size_t count = api->value_list_size(val);
-  for (size_t i = 0; i < count; ++i) {
-    wef_value_t* itemVal = api->value_list_get(val, i);
-    if (!itemVal || !api->value_is_dict(itemVal))
-      continue;
-    wef_value_t* typeVal = api->value_dict_get(itemVal, "type");
-    if (typeVal && api->value_is_string(typeVal)) {
-      size_t len = 0;
-      char* s = api->value_get_string(typeVal, &len);
-      if (s && std::string(s) == "separator") {
-        gtk_menu_shell_append(GTK_MENU_SHELL(menu),
-                              gtk_separator_menu_item_new());
-        api->value_free_string(s);
-        continue;
-      }
-      if (s)
-        api->value_free_string(s);
-    }
-    wef_value_t* labelVal = api->value_dict_get(itemVal, "label");
-    std::string label;
-    if (labelVal && api->value_is_string(labelVal)) {
-      size_t len = 0;
-      char* s = api->value_get_string(labelVal, &len);
-      if (s) {
-        label = std::string(s, len);
-        api->value_free_string(s);
-      }
-    }
-    wef_value_t* submenuVal = api->value_dict_get(itemVal, "submenu");
-    if (submenuVal && api->value_is_list(submenuVal)) {
-      GtkWidget* parent = gtk_menu_item_new_with_label(label.c_str());
-      GtkWidget* sub = BuildLinuxTrayMenu(tray_id, submenuVal, api);
-      if (sub)
-        gtk_menu_item_set_submenu(GTK_MENU_ITEM(parent), sub);
-      gtk_menu_shell_append(GTK_MENU_SHELL(menu), parent);
-      continue;
-    }
-    wef_value_t* idVal = api->value_dict_get(itemVal, "id");
-    std::string item_id;
-    if (idVal && api->value_is_string(idVal)) {
-      size_t len = 0;
-      char* s = api->value_get_string(idVal, &len);
-      if (s) {
-        item_id = std::string(s, len);
-        api->value_free_string(s);
-      }
-    }
-    GtkWidget* mi = gtk_menu_item_new_with_label(label.c_str());
-    wef_value_t* enabledVal = api->value_dict_get(itemVal, "enabled");
-    if (enabledVal && api->value_is_bool(enabledVal) &&
-        !api->value_get_bool(enabledVal)) {
-      gtk_widget_set_sensitive(mi, FALSE);
-    }
-    if (!item_id.empty()) {
-      auto* ctx = new MenuActivateCtx{tray_id, item_id};
-      g_signal_connect_data(mi, "activate", G_CALLBACK(OnLinuxTrayMenuActivate),
-                            ctx, DestroyMenuActivateCtx, (GConnectFlags)0);
-    }
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
-  }
-  gtk_widget_show_all(menu);
-  return menu;
-}
-}  // namespace
-#endif  // WEF_HAVE_APPINDICATOR
+// Thin trampolines over backend-common/src/tray_linux.cc.
 
 uint32_t WebKitGTKBackend::CreateTrayIcon() {
-#ifdef WEF_HAVE_APPINDICATOR
-  uint32_t tray_id =
-      g_linux_next_tray_id.fetch_add(1, std::memory_order_relaxed);
-  std::string idstr = "wef-tray-" + std::to_string(tray_id);
-  AppIndicator* ind = app_indicator_new(
-      idstr.c_str(), "", APP_INDICATOR_CATEGORY_APPLICATION_STATUS);
-  if (!ind)
-    return 0;
-  app_indicator_set_status(ind, APP_INDICATOR_STATUS_ACTIVE);
-  // AppIndicator requires a non-null menu to be visible in most DEs.
-  GtkWidget* placeholder = gtk_menu_new();
-  gtk_widget_show_all(placeholder);
-  app_indicator_set_menu(ind, GTK_MENU(placeholder));
-  LinuxTrayEntry entry{};
-  entry.indicator = ind;
-  entry.menu = placeholder;
-  std::lock_guard<std::mutex> lock(g_linux_tray_mutex);
-  g_linux_trays[tray_id] = std::move(entry);
-  return tray_id;
-#else
-  return 0;
-#endif
+  return wef_common::CreateTrayIconLinux();
 }
-
 void WebKitGTKBackend::DestroyTrayIcon(uint32_t tray_id) {
-#ifdef WEF_HAVE_APPINDICATOR
-  std::lock_guard<std::mutex> lock(g_linux_tray_mutex);
-  auto it = g_linux_trays.find(tray_id);
-  if (it == g_linux_trays.end())
-    return;
-  if (it->second.indicator) {
-    app_indicator_set_status(it->second.indicator,
-                             APP_INDICATOR_STATUS_PASSIVE);
-    g_object_unref(it->second.indicator);
-  }
-  g_linux_trays.erase(it);
-#else
-  (void)tray_id;
-#endif
+  wef_common::DestroyTrayIconLinux(tray_id);
 }
-
 void WebKitGTKBackend::SetTrayIcon(uint32_t tray_id, const void* png_bytes,
                                    size_t len) {
-#ifdef WEF_HAVE_APPINDICATOR
-  if (!png_bytes || len == 0)
-    return;
-  // AppIndicator on most DEs reads icons by name from the icon theme, not
-  // from raw bytes. Write the bytes to a per-tray temp file and point the
-  // indicator at its full path.
-  std::string path = "/tmp/wef-tray-" + std::to_string(tray_id) + ".png";
-  FILE* f = fopen(path.c_str(), "wb");
-  if (!f)
-    return;
-  fwrite(png_bytes, 1, len, f);
-  fclose(f);
-  std::lock_guard<std::mutex> lock(g_linux_tray_mutex);
-  auto it = g_linux_trays.find(tray_id);
-  if (it == g_linux_trays.end() || !it->second.indicator)
-    return;
-  app_indicator_set_icon_full(it->second.indicator, path.c_str(), "");
-#else
-  (void)tray_id;
-  (void)png_bytes;
-  (void)len;
-#endif
+  wef_common::SetTrayIconLinux(tray_id, png_bytes, len);
 }
-
-void WebKitGTKBackend::SetTrayTooltip(uint32_t /*tray_id*/,
-                                      const char* /*tooltip_or_null*/) {
-  // AppIndicator / StatusNotifier has no tooltip concept. The title is
-  // visible in some DEs — a v1 approximation would be app_indicator_set_title,
-  // but most users expect tooltips not to appear, so we no-op.
+void WebKitGTKBackend::SetTrayTooltip(uint32_t tray_id,
+                                      const char* tooltip_or_null) {
+  wef_common::SetTrayTooltipLinux(tray_id, tooltip_or_null);
 }
-
 void WebKitGTKBackend::SetTrayMenu(uint32_t tray_id, wef_value_t* menu_template,
                                    const wef_backend_api_t* api,
                                    wef_menu_click_fn on_click,
                                    void* on_click_data) {
-#ifdef WEF_HAVE_APPINDICATOR
-  GtkWidget* new_menu =
-      menu_template ? BuildLinuxTrayMenu(tray_id, menu_template, api) : nullptr;
-  if (menu_template)
-    api->value_free(menu_template);
-  std::lock_guard<std::mutex> lock(g_linux_tray_mutex);
-  auto it = g_linux_trays.find(tray_id);
-  if (it == g_linux_trays.end()) {
-    if (new_menu)
-      gtk_widget_destroy(new_menu);
-    return;
-  }
-  if (new_menu) {
-    app_indicator_set_menu(it->second.indicator, GTK_MENU(new_menu));
-    it->second.menu = new_menu;
-  } else {
-    GtkWidget* empty = gtk_menu_new();
-    gtk_widget_show_all(empty);
-    app_indicator_set_menu(it->second.indicator, GTK_MENU(empty));
-    it->second.menu = empty;
-  }
-  it->second.menu_click_fn = on_click;
-  it->second.menu_click_data = on_click_data;
-#else
-  (void)tray_id;
-  (void)menu_template;
-  (void)api;
-  (void)on_click;
-  (void)on_click_data;
-#endif
+  wef_common::SetTrayMenuLinux(tray_id, menu_template, api, on_click,
+                                on_click_data);
 }
-
-void WebKitGTKBackend::SetTrayClickHandler(uint32_t /*tray_id*/,
-                                           wef_tray_click_fn /*handler*/,
-                                           void* /*user_data*/) {
-  // AppIndicator has no left-click event; the indicator's menu pops up on
-  // any click. Left-click handlers are a no-op on Linux.
+void WebKitGTKBackend::SetTrayClickHandler(uint32_t tray_id,
+                                           wef_tray_click_fn handler,
+                                           void* user_data) {
+  wef_common::SetTrayClickHandlerLinux(tray_id, handler, user_data);
 }
 
 // ============================================================================
 // Notifications (WebKitGTK Linux)
 // ============================================================================
 //
-// Same as the CEF Linux backend: shell out to `notify-send`. notify-send
-// is fire-and-forget, so on_event only sees SHOWN (synthetic, fired
-// immediately after spawn) and CLOSED (synthetic, fired from
-// CloseNotification). Click / action events are not surfaced.
-
-namespace {
-
-struct WvLinuxNotifEntry {
-  std::string tag;
-  wef_notification_event_fn on_event;
-  void* user_data;
-};
-std::mutex& WvNotifMutexLinux() {
-  static std::mutex m;
-  return m;
-}
-std::map<uint32_t, WvLinuxNotifEntry>& WvNotifMapLinux() {
-  static std::map<uint32_t, WvLinuxNotifEntry> map;
-  return map;
-}
-std::atomic<uint32_t> g_wv_next_notif_id_linux{1};
-
-std::string WvShellEscape(const std::string& s) {
-  std::string out = "'";
-  for (char c : s) {
-    if (c == '\'')
-      out += "'\\''";
-    else
-      out += c;
-  }
-  out += "'";
-  return out;
-}
-
-}  // namespace
+// Thin trampoline over the shared notify-send implementation in
+// backend-common/src/notifications_linux.cc.
 
 uint32_t WebKitGTKBackend::ShowNotification(
     wef_value_t* options, const wef_backend_api_t* api,
     wef_notification_event_fn on_event, void* user_data) {
-  if (!options)
-    return 0;
-  if (!api->value_is_dict(options)) {
-    api->value_free(options);
-    return 0;
-  }
-
-  auto get_string = [&](const char* key) -> std::string {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_string(v))
-      return std::string();
-    size_t len = 0;
-    char* s = api->value_get_string(v, &len);
-    if (!s)
-      return std::string();
-    std::string out(s, len);
-    api->value_free_string(s);
-    return out;
-  };
-  auto get_bool = [&](const char* key, bool dfl) -> bool {
-    wef_value_t* v = api->value_dict_get(options, key);
-    if (!v || !api->value_is_bool(v))
-      return dfl;
-    return api->value_get_bool(v);
-  };
-
-  std::string title = get_string("title");
-  std::string body = get_string("body");
-  std::string tag = get_string("tag");
-  bool require_interaction = get_bool("require_interaction", false);
-  api->value_free(options);
-
-  uint32_t nid =
-      g_wv_next_notif_id_linux.fetch_add(1, std::memory_order_relaxed);
-
-  std::string cmd = "notify-send";
-  if (require_interaction)
-    cmd += " --urgency=critical";
-  if (!tag.empty()) {
-    cmd += " --hint=string:x-canonical-private-synchronous:";
-    cmd += WvShellEscape(tag);
-  }
-  cmd += " -- ";
-  cmd += WvShellEscape(title);
-  cmd += " ";
-  cmd += WvShellEscape(body);
-  cmd += " &";
-  int rc = std::system(cmd.c_str());
-  (void)rc;
-
-  {
-    std::lock_guard<std::mutex> lock(WvNotifMutexLinux());
-    WvNotifMapLinux()[nid] = {tag, on_event, user_data};
-  }
-  if (on_event)
-    on_event(user_data, nid, WEF_NOTIFICATION_SHOWN, nullptr);
-  return nid;
+  wef_common::NotificationOptions opts =
+      wef_common::ParseNotificationOptions(options, api);
+  return wef_common::ShowNotificationLinux(opts, on_event, user_data);
 }
 
 void WebKitGTKBackend::CloseNotification(uint32_t notification_id) {
-  wef_notification_event_fn fn = nullptr;
-  void* ud = nullptr;
-  {
-    std::lock_guard<std::mutex> lock(WvNotifMutexLinux());
-    auto it = WvNotifMapLinux().find(notification_id);
-    if (it == WvNotifMapLinux().end())
-      return;
-    fn = it->second.on_event;
-    ud = it->second.user_data;
-    WvNotifMapLinux().erase(it);
-  }
-  if (fn)
-    fn(ud, notification_id, WEF_NOTIFICATION_CLOSED, nullptr);
+  wef_common::CloseNotificationLinux(notification_id);
 }
 
 // ============================================================================
