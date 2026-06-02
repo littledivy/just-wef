@@ -231,6 +231,18 @@ int main(int argc, char* argv[]) {
     // silently ignored.
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
+    // Allow the host to override the dock icon at launch (e.g. a project's
+    // favicon during `deno desktop --hmr`). Setting it programmatically
+    // bypasses LaunchServices' icon cache and the bundle's CFBundleIconFile,
+    // both of which we can't rely on for the shared dev bundle.
+    if (const char* icon_path = getenv("WEF_APP_ICON")) {
+      NSString* path = [NSString stringWithUTF8String:icon_path];
+      NSImage* icon = [[NSImage alloc] initWithContentsOfFile:path];
+      if (icon) {
+        [NSApp setApplicationIconImage:icon];
+      }
+    }
+
     CefSettings settings;
     settings.no_sandbox = true;
 
