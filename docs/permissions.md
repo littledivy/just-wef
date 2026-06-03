@@ -27,7 +27,3 @@ authorized at all." An application that packages its own `.app` sets its own
 bundle identifier and entitlements; wef hard-codes none of its own. Windows
 (`Shell_NotifyIcon`) and Linux (`notify-send`) have no permission model, so both
 calls report granted immediately.
-
-| Feature                       | CEF | WebView | Winit |
-| ----------------------------- | --- | ------- | ----- |
-| Query / request notifications | yes | yes     | yes   |

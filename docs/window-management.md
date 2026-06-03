@@ -29,17 +29,3 @@ Everything else is a live setter. All positions and sizes are expressed in
 density-independent pixels with the origin at the top-left of the screen. The
 Winit backend can create and manage windows, but because it has no web engine it
 cannot navigate to a URL or execute JavaScript.
-
-| Feature                   | CEF | WebView | Winit |
-| ------------------------- | --- | ------- | ----- |
-| Create / close window     | yes | yes     | yes   |
-| Navigate (load URL)       | yes | yes     | no    |
-| Set title                 | yes | yes     | yes   |
-| Execute JavaScript        | yes | yes     | no    |
-| Set / get window size     | yes | yes     | yes   |
-| Set / get window position | yes | yes     | yes   |
-| Set / get resizable       | yes | yes     | yes   |
-| Set / get always on top   | yes | yes     | yes   |
-| Show / hide / is visible  | yes | yes     | yes   |
-| Focus                     | yes | yes     | yes   |
-| Quit                      | yes | yes     | yes   |

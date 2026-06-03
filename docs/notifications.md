@@ -28,16 +28,3 @@ action buttons. Linux shells out to `notify-send`, which is fire-and-forget, so
 only the synthetic shown and closed events are reported. The Winit backend uses
 `notify-rust` and reports show, close, and a synthetic shown event; use the CEF
 or WebView backend when you need click or action callbacks.
-
-| Feature                  | CEF            | WebView        | Winit |
-| ------------------------ | -------------- | -------------- | ----- |
-| Show / close             | yes            | yes            | yes   |
-| Title, body              | yes            | yes            | yes   |
-| Icon                     | Windows        | Windows        | no    |
-| Tag (replace)            | yes            | yes            | Linux |
-| Silent                   | macOS, Windows | macOS, Windows | no    |
-| Require interaction      | Linux          | Linux          | Linux |
-| Action buttons           | macOS          | macOS          | no    |
-| Shown / closed callbacks | yes            | yes            | yes   |
-| Clicked callback         | macOS, Windows | macOS, Windows | no    |
-| Action callback          | macOS          | macOS          | no    |

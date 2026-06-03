@@ -36,11 +36,3 @@ are finished with it. The namespace object is named `Wef` by default; call
 `just_wef::set_js_namespace` before creating any windows to change it. All
 handlers run on the user-interface thread. None of this is available on the
 Winit backend, which has no JavaScript engine.
-
-| Feature                  | CEF | WebView | Winit |
-| ------------------------ | --- | ------- | ----- |
-| Native bindings          | yes | yes     | no    |
-| Async bindings           | yes | yes     | no    |
-| JS callbacks as args     | yes | yes     | no    |
-| Custom namespace         | yes | yes     | no    |
-| Execute JS (with result) | yes | yes     | no    |

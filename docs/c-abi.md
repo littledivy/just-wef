@@ -1,10 +1,10 @@
 # C ABI
 
 wef is built around a single C header,
-[`capi/include/wef.h`](../capi/include/wef.h). It defines the boundary between a
-**backend** (a native executable embedding a browser engine) and a **runtime**
-(a shared library holding the application logic). The backend implements the
-ABI; the runtime consumes it.
+[`capi/include/wef.h`](https://github.com/littledivy/just-wef/blob/main/capi/include/wef.h).
+It defines the boundary between a **backend** (a native executable embedding a
+browser engine) and a **runtime** (a shared library holding the application
+logic). The backend implements the ABI; the runtime consumes it.
 
 `WEF_API_VERSION` (currently `25`) versions the contract. The `version` field on
 the API table lets a runtime detect the backend's vintage and avoid calling
@@ -66,7 +66,8 @@ The pointers group into:
 - **Notifications** — `show_notification`, `close_notification`.
 - **Permissions** — `query_permission`, `request_permission`.
 
-See [features/](features/) for behavior and per-platform differences.
+See [the feature pages](window-management.md) for behavior and per-platform
+differences.
 
 ## Values (`wef_value_t`)
 

@@ -19,11 +19,3 @@ cursor position, the active modifiers, and the click count. Each backend
 translates its own native event source — Chromium's event path under CEF,
 `NSEvent` on macOS, GDK on Linux, and the Win32 message loop on Windows — into
 this common shape, so the same handler works on every backend.
-
-| Feature               | CEF | WebView | Winit |
-| --------------------- | --- | ------- | ----- |
-| Keyboard events       | yes | yes     | yes   |
-| Mouse click events    | yes | yes     | yes   |
-| Mouse move events     | yes | yes     | yes   |
-| Wheel / scroll events | yes | yes     | yes   |
-| Cursor enter / leave  | yes | yes     | yes   |

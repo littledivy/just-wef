@@ -30,12 +30,3 @@ the desktop theme and does not deliver click or double-click events, and the
 StatusNotifierItem specification has no tooltip, so click handlers, tooltips,
 and dark-mode swapping have no effect there. The CEF backend also uses
 AppIndicator on Linux, so a tray icon does not require a browser window.
-
-| Feature              | CEF            | WebView        | Winit          |
-| -------------------- | -------------- | -------------- | -------------- |
-| Tray icon            | yes            | yes            | yes            |
-| Tooltip              | macOS, Windows | macOS, Windows | yes            |
-| Right-click menu     | yes            | yes            | yes            |
-| Left-click handler   | macOS, Windows | macOS, Windows | yes            |
-| Double-click handler | macOS, Windows | macOS, Windows | yes            |
-| Dark-mode icon       | macOS, Windows | macOS, Windows | macOS, Windows |

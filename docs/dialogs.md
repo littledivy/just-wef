@@ -25,12 +25,6 @@ entered, or `None` if the user cancelled. The same three operations are also
 available as the application-scoped free functions `just_wef::alert`,
 `just_wef::confirm`, and `just_wef::prompt`.
 
-| Feature | CEF | WebView | Winit |
-| ------- | --- | ------- | ----- |
-| Alert   | yes | yes     | yes   |
-| Confirm | yes | yes     | yes   |
-| Prompt  | yes | yes     | yes   |
-
 On the CEF and WebView backends, the page's own `alert()`, `confirm()`, and
 `prompt()` calls are routed to these native dialogs. The Winit backend has no
 web engine, so it has no page dialogs to route.

@@ -20,9 +20,3 @@ The window handle, the display handle, and the type constant together provide
 everything a library such as `raw-window-handle` needs to build a rendering
 surface. The CEF and WebView backends own and render into their windows
 themselves, so they do not expose these handles.
-
-| Feature                | CEF | WebView | Winit |
-| ---------------------- | --- | ------- | ----- |
-| Get window handle      | no  | no      | yes   |
-| Get display handle     | no  | no      | yes   |
-| Get window handle type | no  | no      | yes   |

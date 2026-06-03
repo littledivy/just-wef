@@ -25,11 +25,3 @@ and Telegram; taskbars and window-manager overviews surface that title.
 Requesting attention bounces the dock icon on macOS, flashes the taskbar button
 on Windows, and sets the window's urgency hint on Linux. The dock menu, the
 ability to hide the dock icon, and the reopen callback exist only on macOS.
-
-| Feature         | CEF   | WebView | Winit |
-| --------------- | ----- | ------- | ----- |
-| Bounce / flash  | yes   | yes     | yes   |
-| Badge           | yes   | yes     | yes   |
-| Dock menu       | macOS | macOS   | macOS |
-| Hide dock icon  | macOS | macOS   | macOS |
-| Reopen callback | macOS | macOS   | macOS |

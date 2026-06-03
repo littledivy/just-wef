@@ -40,9 +40,3 @@ reparenting CEF into a client-owned GtkWindow through
 `CefWindowInfo::SetAsChild` breaks on XWayland, where cross-client X11 child
 windows are not supported natively. Context menus work everywhere, because a
 `GtkMenu` pop-up does not need a containing window.
-
-| Feature          | CEF            | WebView | Winit          |
-| ---------------- | -------------- | ------- | -------------- |
-| Application menu | macOS, Windows | yes     | macOS, Windows |
-| Context menu     | yes            | yes     | macOS, Windows |
-| Open DevTools    | yes            | yes     | no             |

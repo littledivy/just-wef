@@ -16,10 +16,3 @@ let win = Window::new(800, 600)
 The close-requested handler fires when the user clicks the window's close
 button, before the window is destroyed. This gives the runtime a chance to ask
 for confirmation or save unsaved work first.
-
-| Feature         | CEF | WebView | Winit |
-| --------------- | --- | ------- | ----- |
-| Focus / blur    | yes | yes     | yes   |
-| Resize          | yes | yes     | yes   |
-| Move            | yes | yes     | yes   |
-| Close requested | yes | yes     | yes   |
