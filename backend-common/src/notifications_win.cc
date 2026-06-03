@@ -153,7 +153,7 @@ done:
 }
 
 HICON LoadDefaultAppIcon() {
-  return (HICON)LoadImageW(GetModuleHandleW(nullptr), IDI_APPLICATION,
+  return (HICON)LoadImageW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(32512),
                            IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE);
 }
 
