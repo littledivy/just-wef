@@ -41,8 +41,6 @@ unsafe impl Send for TrayEntry {}
 
 static TRAYS: Mutex<Option<HashMap<u32, TrayEntry>>> = Mutex::new(None);
 
-/// Tray icon bounds as `(x, y, width, height)` in logical, top-left screen
-/// coordinates.
 type TrayRect = (i32, i32, i32, i32);
 
 /// Tray icon bounds in logical, top-left screen coordinates (the same space

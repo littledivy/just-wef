@@ -39,6 +39,11 @@ fn main() {
 wef::main!(main);
 ```
 
+### Building
+
+`make help` lists the targets; see [docs/building.md](docs/building.md).
+[docs/architecture.md](docs/architecture.md) covers the backend/runtime design.
+
 ### Backend matrix
 
 wef ships three backends today. The [CEF](./cef) backend embeds Chromium 144 and
