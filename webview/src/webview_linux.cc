@@ -1,11 +1,11 @@
 // Copyright 2025 Divy Srivastava. All rights reserved. MIT license.
 
+#include <gtk/gtk.h>
+#include <gdk/gdkkeysyms.h>
+
 #include "runtime_loader.h"
 #include "wef_backend_common.h"
 #include "wef_json.h"
-
-#include <gtk/gtk.h>
-#include <gdk/gdkkeysyms.h>
 #include <webkit2/webkit2.h>
 #include <JavaScriptCore/JavaScript.h>
 

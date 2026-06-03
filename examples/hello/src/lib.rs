@@ -1,6 +1,4 @@
-use just_wef::{DockBounceType, MenuItem, TrayIcon, Value, Window};
-
-const TRAY_PNG: &[u8] = include_bytes!("../tray.png");
+use just_wef::{DockBounceType, MenuItem, Value, Window};
 
 fn hello_main() {
   let rt = tokio::runtime::Runtime::new().unwrap();

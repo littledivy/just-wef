@@ -41,13 +41,16 @@ unsafe impl Send for TrayEntry {}
 
 static TRAYS: Mutex<Option<HashMap<u32, TrayEntry>>> = Mutex::new(None);
 
+/// Tray icon bounds as `(x, y, width, height)` in logical, top-left screen
+/// coordinates.
+type TrayRect = (i32, i32, i32, i32);
+
 /// Tray icon bounds in logical, top-left screen coordinates (the same space
 /// the winit backend uses for window positions), keyed by tray id. Refreshed
 /// on the main thread by [`poll_tray_events`]; read from any thread by the
 /// `get_tray_icon_bounds` trampoline. Empty on platforms where `tray-icon`
 /// can't report geometry (Linux).
-static TRAY_RECTS: Mutex<Option<HashMap<u32, (i32, i32, i32, i32)>>> =
-  Mutex::new(None);
+static TRAY_RECTS: Mutex<Option<HashMap<u32, TrayRect>>> = Mutex::new(None);
 
 fn trays() -> std::sync::MutexGuard<'static, Option<HashMap<u32, TrayEntry>>> {
   let mut g = TRAYS.lock().unwrap();
