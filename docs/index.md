@@ -1,6 +1,4 @@
-<img src="https://github.com/user-attachments/assets/c7d55981-ab29-4bea-a4c6-28feeb1b4520" alt="wef" width="120" align="left">
-
-# wef
+<img src="https://github.com/user-attachments/assets/c7d55981-ab29-4bea-a4c6-28feeb1b4520" alt="wef" width="120" align="left" style="margin: 0 1.25rem 0.75rem 0;">
 
 **wef** ("Web embedded framework") lets you build cross-platform desktop apps
 with web technologies and your choice of browser engine.
