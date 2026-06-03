@@ -39,10 +39,15 @@ fn main() {
 wef::main!(main);
 ```
 
-### Building
+### Docs
 
-`make help` lists the targets; see [docs/building.md](docs/building.md).
-[docs/architecture.md](docs/architecture.md) covers the backend/runtime design.
+- [architecture.md](docs/architecture.md) — backend/runtime split
+- [c-abi.md](docs/c-abi.md) — the `wef.h` C ABI: runtime entry points, the API
+  table, the value model, and the JS call flow
+- [backends.md](docs/backends.md) — CEF, WebView, and Winit
+- [features.md](docs/features.md) — every feature, its ABI surface, and
+  per-platform behavior
+- [building.md](docs/building.md) — `make` targets and prerequisites
 
 ### Backend matrix
 
