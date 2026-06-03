@@ -43,15 +43,18 @@ NSMenu* BuildDefaultEditSubmenu() {
 
 static bool MenuTreeHasCopyAction(NSMenu* menu) {
   for (NSMenuItem* item in [menu itemArray]) {
-    if ([item action] == @selector(copy:)) return true;
-    if ([item submenu] && MenuTreeHasCopyAction([item submenu])) return true;
+    if ([item action] == @selector(copy:))
+      return true;
+    if ([item submenu] && MenuTreeHasCopyAction([item submenu]))
+      return true;
   }
   return false;
 }
 
 // Force an Edit submenu into the menubar if the embedder didn't include one.
 void EnsureEditMenu(NSMenu* menubar) {
-  if (MenuTreeHasCopyAction(menubar)) return;
+  if (MenuTreeHasCopyAction(menubar))
+    return;
   NSMenuItem* editItem = [[NSMenuItem alloc] init];
   [editItem setSubmenu:BuildDefaultEditSubmenu()];
   [menubar addItem:editItem];
@@ -237,10 +240,8 @@ int main(int argc, char* argv[]) {
     // favicon during `deno desktop --hmr`). Setting it programmatically
     // bypasses LaunchServices' icon cache and the bundle's CFBundleIconFile.
     if (const char* icon_path = getenv("WEF_APP_ICON")) {
-      NSImage* icon =
-          [[NSImage alloc] initWithContentsOfFile:[NSString
-                                                      stringWithUTF8String:
-                                                          icon_path]];
+      NSImage* icon = [[NSImage alloc]
+          initWithContentsOfFile:[NSString stringWithUTF8String:icon_path]];
       if (icon) {
         [NSApp setApplicationIconImage:icon];
       }

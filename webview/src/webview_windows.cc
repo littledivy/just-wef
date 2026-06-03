@@ -296,8 +296,7 @@ class WebView2Backend : public WefBackend {
   bool GetTrayIconBounds(uint32_t tray_id, int* x, int* y, int* width,
                          int* height) override;
 
-  uint32_t ShowNotification(wef_value_t* options,
-                            const wef_backend_api_t* api,
+  uint32_t ShowNotification(wef_value_t* options, const wef_backend_api_t* api,
                             wef_notification_event_fn on_event,
                             void* user_data) override;
   void CloseNotification(uint32_t notification_id) override;
@@ -511,10 +510,9 @@ void WebView2Backend::CreateWindowEx(uint32_t window_id, int width, int height,
     ex_style |= WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
   }
 
-  HWND hwnd = CreateWindowExW(ex_style, L"WefWebView2", L"", style,
-                              CW_USEDEFAULT, CW_USEDEFAULT, width, height,
-                              nullptr, nullptr, GetModuleHandle(nullptr),
-                              nullptr);
+  HWND hwnd = CreateWindowExW(
+      ex_style, L"WefWebView2", L"", style, CW_USEDEFAULT, CW_USEDEFAULT, width,
+      height, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
 
   {
     std::lock_guard<std::mutex> lock(g_hwnd_mutex);
@@ -1100,7 +1098,7 @@ void WebView2Backend::SetDockBadge(const char* badge_or_null) {
     std::wstring current_w(buf, n);
     // UTF-16 → UTF-8 for ApplyTitlePrefixBadge.
     int utf8_len = WideCharToMultiByte(CP_UTF8, 0, current_w.c_str(), n,
-                                        nullptr, 0, nullptr, nullptr);
+                                       nullptr, 0, nullptr, nullptr);
     std::string current_u8(utf8_len, '\0');
     WideCharToMultiByte(CP_UTF8, 0, current_w.c_str(), n, current_u8.data(),
                         utf8_len, nullptr, nullptr);
@@ -1152,7 +1150,7 @@ void WebView2Backend::SetTrayMenu(uint32_t tray_id, wef_value_t* menu_template,
                                   wef_menu_click_fn on_click,
                                   void* on_click_data) {
   wef_common::SetTrayMenuWin(tray_id, menu_template, api, on_click,
-                              on_click_data);
+                             on_click_data);
 }
 void WebView2Backend::SetTrayClickHandler(uint32_t tray_id,
                                           wef_tray_click_fn handler,
@@ -1165,9 +1163,10 @@ void WebView2Backend::SetTrayClickHandler(uint32_t tray_id,
 //
 // Thin trampoline over backend-common/src/notifications_win.cc.
 
-uint32_t WebView2Backend::ShowNotification(
-    wef_value_t* options, const wef_backend_api_t* api,
-    wef_notification_event_fn on_event, void* user_data) {
+uint32_t WebView2Backend::ShowNotification(wef_value_t* options,
+                                           const wef_backend_api_t* api,
+                                           wef_notification_event_fn on_event,
+                                           void* user_data) {
   wef_common::NotificationOptions opts =
       wef_common::ParseNotificationOptions(options, api);
   return wef_common::ShowNotificationWin(opts, on_event, user_data);
