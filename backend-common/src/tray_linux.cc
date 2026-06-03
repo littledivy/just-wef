@@ -8,9 +8,9 @@
 // When libappindicator is not available (no WEF_HAVE_APPINDICATOR
 // define), CreateTrayIconLinux returns 0 and the other functions no-op.
 
-#include "wef_backend_common.h"
-
 #include <gtk/gtk.h>
+
+#include "wef_backend_common.h"
 
 #include <atomic>
 #include <cstdio>

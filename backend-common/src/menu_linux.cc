@@ -6,9 +6,9 @@
 // the same builder serves application menus, context menus, dock-menu
 // fallbacks (none on Linux today), and tray menus.
 
-#include "wef_backend_common.h"
-
 #include <gtk/gtk.h>
+
+#include "wef_backend_common.h"
 
 #include <string>
 

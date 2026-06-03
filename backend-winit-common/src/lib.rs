@@ -2501,9 +2501,7 @@ macro_rules! define_common_backend_fns {
     unsafe extern "C" fn backend_query_permission(
       _data: *mut ::std::ffi::c_void,
       kind: ::std::ffi::c_int,
-      cb: ::std::option::Option<
-        $crate::permission::WefPermissionCallbackFn,
-      >,
+      cb: ::std::option::Option<$crate::permission::WefPermissionCallbackFn>,
       user_data: *mut ::std::ffi::c_void,
     ) {
       $crate::permission::query_permission(kind, cb, user_data);
@@ -2512,9 +2510,7 @@ macro_rules! define_common_backend_fns {
     unsafe extern "C" fn backend_request_permission(
       _data: *mut ::std::ffi::c_void,
       kind: ::std::ffi::c_int,
-      cb: ::std::option::Option<
-        $crate::permission::WefPermissionCallbackFn,
-      >,
+      cb: ::std::option::Option<$crate::permission::WefPermissionCallbackFn>,
       user_data: *mut ::std::ffi::c_void,
     ) {
       $crate::permission::request_permission(kind, cb, user_data);

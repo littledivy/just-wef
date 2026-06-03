@@ -4,9 +4,9 @@
 // GTK3 on Linux, so we can use the in-process dialog rather than
 // shelling out to zenity.
 
-#include "wef_backend_common.h"
-
 #include <gtk/gtk.h>
+
+#include "wef_backend_common.h"
 
 #include <cstdlib>
 #include <cstring>

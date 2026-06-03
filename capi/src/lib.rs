@@ -1441,7 +1441,14 @@ impl TrayIcon {
     let mut width: c_int = 0;
     let mut height: c_int = 0;
     let ok = unsafe {
-      f(api.backend_data, self.id, &mut x, &mut y, &mut width, &mut height)
+      f(
+        api.backend_data,
+        self.id,
+        &mut x,
+        &mut y,
+        &mut width,
+        &mut height,
+      )
     };
     if ok {
       Some((x, y, width, height))
@@ -1924,9 +1931,9 @@ impl Notification {
   }
 }
 
-fn notification_handlers() -> &'static Mutex<
-  HashMap<u32, Arc<dyn Fn(NotificationEvent) + Send + Sync>>,
-> {
+fn notification_handlers(
+) -> &'static Mutex<HashMap<u32, Arc<dyn Fn(NotificationEvent) + Send + Sync>>>
+{
   NOTIFICATION_HANDLERS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -1964,7 +1971,10 @@ unsafe extern "C" fn notification_event_callback(
     h(event);
   }
   if is_terminal {
-    notification_handlers().lock().unwrap().remove(&notification_id);
+    notification_handlers()
+      .lock()
+      .unwrap()
+      .remove(&notification_id);
   }
 }
 
@@ -2186,8 +2196,14 @@ mod tests {
     // Anything outside the WEF_PERMISSION_STATUS_* range must map to
     // Unsupported so a future backend can't silently mean "Granted" by
     // returning, say, 99.
-    assert_eq!(PermissionStatus::from_raw(99), PermissionStatus::Unsupported);
-    assert_eq!(PermissionStatus::from_raw(-1), PermissionStatus::Unsupported);
+    assert_eq!(
+      PermissionStatus::from_raw(99),
+      PermissionStatus::Unsupported
+    );
+    assert_eq!(
+      PermissionStatus::from_raw(-1),
+      PermissionStatus::Unsupported
+    );
   }
 
   // --- Value accessors ---
@@ -2222,7 +2238,10 @@ mod tests {
       enabled: true,
     };
     let v = item.to_value();
-    assert_eq!(dict_get(&v, "label").and_then(|v| v.as_string()), Some("Quit"));
+    assert_eq!(
+      dict_get(&v, "label").and_then(|v| v.as_string()),
+      Some("Quit")
+    );
     // Absent keys when their option is None / enabled is true (default).
     assert!(dict_get(&v, "id").is_none());
     assert!(dict_get(&v, "accelerator").is_none());
@@ -2261,7 +2280,10 @@ mod tests {
       items: vec![MenuItem::Separator],
     };
     let v = sub.to_value();
-    assert_eq!(dict_get(&v, "label").and_then(|v| v.as_string()), Some("File"));
+    assert_eq!(
+      dict_get(&v, "label").and_then(|v| v.as_string()),
+      Some("File")
+    );
     let items = dict_get(&v, "submenu").and_then(|v| v.as_list()).unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(
@@ -2269,9 +2291,14 @@ mod tests {
       Some("separator")
     );
 
-    let role = MenuItem::Role { role: "copy".into() };
+    let role = MenuItem::Role {
+      role: "copy".into(),
+    };
     let rv = role.to_value();
-    assert_eq!(dict_get(&rv, "role").and_then(|v| v.as_string()), Some("copy"));
+    assert_eq!(
+      dict_get(&rv, "role").and_then(|v| v.as_string()),
+      Some("copy")
+    );
   }
 
   // --- Notification::to_value ---
@@ -2279,10 +2306,19 @@ mod tests {
   #[test]
   fn notification_to_value_title_only() {
     let v = Notification::new("hi").to_value();
-    assert_eq!(dict_get(&v, "title").and_then(|v| v.as_string()), Some("hi"));
+    assert_eq!(
+      dict_get(&v, "title").and_then(|v| v.as_string()),
+      Some("hi")
+    );
     // Absent options should not appear.
-    for k in ["body", "icon", "tag", "silent", "require_interaction", "actions"]
-    {
+    for k in [
+      "body",
+      "icon",
+      "tag",
+      "silent",
+      "require_interaction",
+      "actions",
+    ] {
       assert!(
         dict_get(&v, k).is_none(),
         "key {k} should be absent when not set"
@@ -2391,7 +2427,10 @@ mod tests {
     // Role items are wholly defined by the role name. A regression that
     // started attaching `label` or `id` would let user code masquerade
     // as a role-bound system item.
-    let v = MenuItem::Role { role: "quit".into() }.to_value();
+    let v = MenuItem::Role {
+      role: "quit".into(),
+    }
+    .to_value();
     let dict = v.as_dict().unwrap();
     assert!(dict.get("role").is_some());
     assert!(dict.get("label").is_none());
@@ -2415,11 +2454,11 @@ mod tests {
     };
     let v = menu.to_value();
     let outer = v.as_dict().unwrap();
-    let outer_items =
-      outer.get("submenu").and_then(|v| v.as_list()).unwrap();
+    let outer_items = outer.get("submenu").and_then(|v| v.as_list()).unwrap();
     assert_eq!(outer_items.len(), 1);
-    let inner =
-      outer_items[0].as_dict().expect("nested submenu must be dict");
+    let inner = outer_items[0]
+      .as_dict()
+      .expect("nested submenu must be dict");
     let inner_items = inner.get("submenu").and_then(|v| v.as_list()).unwrap();
     assert_eq!(inner_items.len(), 1);
     assert_eq!(

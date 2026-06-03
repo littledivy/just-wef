@@ -113,7 +113,10 @@ mod tests {
   #[test]
   fn key_state_from_raw_known_values() {
     assert_eq!(KeyState::from_raw(WEF_KEY_PRESSED), KeyState::Pressed);
-    assert_eq!(KeyState::from_raw(crate::WEF_KEY_RELEASED), KeyState::Released);
+    assert_eq!(
+      KeyState::from_raw(crate::WEF_KEY_RELEASED),
+      KeyState::Released
+    );
   }
 
   #[test]

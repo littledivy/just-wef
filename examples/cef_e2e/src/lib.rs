@@ -23,31 +23,27 @@ use tokio::sync::oneshot;
 static FAILED: AtomicBool = AtomicBool::new(false);
 
 fn check(name: &str, ok: bool) {
-    if ok {
-        eprintln!("[e2e] PASS {name}");
-    } else {
-        eprintln!("[e2e] FAIL {name}");
-        FAILED.store(true, Ordering::SeqCst);
-    }
+  if ok {
+    eprintln!("[e2e] PASS {name}");
+  } else {
+    eprintln!("[e2e] FAIL {name}");
+    FAILED.store(true, Ordering::SeqCst);
+  }
 }
 
-async fn wait_for<F: Fn() -> bool>(
-    f: F,
-    attempts: u32,
-    step_ms: u64,
-) -> bool {
-    for _ in 0..attempts {
-        if f() {
-            return true;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(step_ms)).await;
+async fn wait_for<F: Fn() -> bool>(f: F, attempts: u32, step_ms: u64) -> bool {
+  for _ in 0..attempts {
+    if f() {
+      return true;
     }
-    f()
+    tokio::time::sleep(std::time::Duration::from_millis(step_ms)).await;
+  }
+  f()
 }
 
 fn e2e_main() {
-    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    rt.block_on(async move {
+  let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+  rt.block_on(async move {
         // Spawn the wef event-loop pump. Without this, queued JS calls
         // (Wef.report, Wef.add) never reach our bind handlers because
         // poll_js_calls() never gets called.

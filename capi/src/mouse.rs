@@ -489,7 +489,10 @@ mod tests {
 
   #[test]
   fn mouse_button_known() {
-    assert_eq!(MouseButton::from_raw(WEF_MOUSE_BUTTON_LEFT), MouseButton::Left);
+    assert_eq!(
+      MouseButton::from_raw(WEF_MOUSE_BUTTON_LEFT),
+      MouseButton::Left
+    );
     assert_eq!(
       MouseButton::from_raw(WEF_MOUSE_BUTTON_RIGHT),
       MouseButton::Right
@@ -498,7 +501,10 @@ mod tests {
       MouseButton::from_raw(WEF_MOUSE_BUTTON_MIDDLE),
       MouseButton::Middle
     );
-    assert_eq!(MouseButton::from_raw(WEF_MOUSE_BUTTON_BACK), MouseButton::Back);
+    assert_eq!(
+      MouseButton::from_raw(WEF_MOUSE_BUTTON_BACK),
+      MouseButton::Back
+    );
     assert_eq!(
       MouseButton::from_raw(WEF_MOUSE_BUTTON_FORWARD),
       MouseButton::Forward
@@ -515,7 +521,11 @@ mod tests {
 
   // --- MouseClickEvent predicates ---
 
-  fn ev(state: MouseButtonState, button: MouseButton, clicks: i32) -> MouseClickEvent {
+  fn ev(
+    state: MouseButtonState,
+    button: MouseButton,
+    clicks: i32,
+  ) -> MouseClickEvent {
     MouseClickEvent {
       window_id: 1,
       state,
@@ -546,19 +556,33 @@ mod tests {
 
   #[test]
   fn is_double_click_requires_click_count_2() {
-    assert!(!ev(MouseButtonState::Released, MouseButton::Left, 1).is_double_click());
-    assert!(ev(MouseButtonState::Released, MouseButton::Left, 2).is_double_click());
-    assert!(ev(MouseButtonState::Released, MouseButton::Left, 3).is_double_click());
+    assert!(
+      !ev(MouseButtonState::Released, MouseButton::Left, 1).is_double_click()
+    );
+    assert!(
+      ev(MouseButtonState::Released, MouseButton::Left, 2).is_double_click()
+    );
+    assert!(
+      ev(MouseButtonState::Released, MouseButton::Left, 3).is_double_click()
+    );
     // Right-button double click doesn't count for `dblclick`.
-    assert!(!ev(MouseButtonState::Released, MouseButton::Right, 2).is_double_click());
+    assert!(
+      !ev(MouseButtonState::Released, MouseButton::Right, 2).is_double_click()
+    );
   }
 
   // --- MouseButtonState::from_raw ---
 
   #[test]
   fn mouse_button_state_known_values() {
-    assert_eq!(MouseButtonState::from_raw(WEF_MOUSE_PRESSED), MouseButtonState::Pressed);
-    assert_eq!(MouseButtonState::from_raw(WEF_MOUSE_RELEASED), MouseButtonState::Released);
+    assert_eq!(
+      MouseButtonState::from_raw(WEF_MOUSE_PRESSED),
+      MouseButtonState::Pressed
+    );
+    assert_eq!(
+      MouseButtonState::from_raw(WEF_MOUSE_RELEASED),
+      MouseButtonState::Released
+    );
   }
 
   #[test]
@@ -574,9 +598,18 @@ mod tests {
 
   #[test]
   fn wheel_delta_mode_known_values() {
-    assert_eq!(WheelDeltaMode::from_raw(WEF_WHEEL_DELTA_PIXEL), WheelDeltaMode::Pixel);
-    assert_eq!(WheelDeltaMode::from_raw(WEF_WHEEL_DELTA_LINE), WheelDeltaMode::Line);
-    assert_eq!(WheelDeltaMode::from_raw(WEF_WHEEL_DELTA_PAGE), WheelDeltaMode::Page);
+    assert_eq!(
+      WheelDeltaMode::from_raw(WEF_WHEEL_DELTA_PIXEL),
+      WheelDeltaMode::Pixel
+    );
+    assert_eq!(
+      WheelDeltaMode::from_raw(WEF_WHEEL_DELTA_LINE),
+      WheelDeltaMode::Line
+    );
+    assert_eq!(
+      WheelDeltaMode::from_raw(WEF_WHEEL_DELTA_PAGE),
+      WheelDeltaMode::Page
+    );
   }
 
   #[test]
@@ -597,14 +630,22 @@ mod tests {
 
   #[test]
   fn resize_event_fields_distinct() {
-    let ev = ResizeEvent { window_id: 1, width: 800, height: 600 };
+    let ev = ResizeEvent {
+      window_id: 1,
+      width: 800,
+      height: 600,
+    };
     assert_eq!(ev.width, 800);
     assert_eq!(ev.height, 600);
   }
 
   #[test]
   fn move_event_fields_distinct() {
-    let ev = MoveEvent { window_id: 1, x: 100, y: 200 };
+    let ev = MoveEvent {
+      window_id: 1,
+      x: 100,
+      y: 200,
+    };
     assert_eq!(ev.x, 100);
     assert_eq!(ev.y, 200);
   }
@@ -631,8 +672,14 @@ mod tests {
 
   #[test]
   fn focused_event_distinct_states() {
-    let focused = FocusedEvent { window_id: 1, focused: true };
-    let blurred = FocusedEvent { window_id: 1, focused: false };
+    let focused = FocusedEvent {
+      window_id: 1,
+      focused: true,
+    };
+    let blurred = FocusedEvent {
+      window_id: 1,
+      focused: false,
+    };
     assert!(focused.focused);
     assert!(!blurred.focused);
   }
