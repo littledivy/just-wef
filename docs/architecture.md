@@ -65,51 +65,48 @@ underlying engine. This is an interception model, not a consumption model.
 
 ### C++ backend code sharing (`backend-common`)
 
-The CEF and webview backends both link `backend-common/`, a CMake static
-library that holds platform implementations of APIs the two backends would
-otherwise duplicate. Each backend `add_subdirectory`s it and links
-`wef_backend_common` from its platform branch.
+The CEF and webview backends both link `backend-common/`, a CMake static library
+that holds platform implementations of APIs the two backends would otherwise
+duplicate. Each backend `add_subdirectory`s it and links `wef_backend_common`
+from its platform branch.
 
 The bridge is intentionally minimal — common code never touches the
-backend-specific `wef_value_t` types. Each backend pre-parses
-`wef_value_t` into plain C++ structs (`wef_common::NotificationOptions`,
-etc.) before calling into common functions. Header:
-`backend-common/include/wef_backend_common.h`.
+backend-specific `wef_value_t` types. Each backend pre-parses `wef_value_t` into
+plain C++ structs (`wef_common::NotificationOptions`, etc.) before calling into
+common functions. Header: `backend-common/include/wef_backend_common.h`.
 
 Currently shared:
 
-| Area              | macOS                              | Windows                            | Linux                              |
-| ----------------- | ---------------------------------- | ---------------------------------- | ---------------------------------- |
-| **Notifications** | `notifications_mac.mm` (UN)        | `notifications_win.cc` (NIIF)      | `notifications_linux.cc` (notify-send) |
-| **Dialogs**       | `dialog_mac.mm` (NSAlert)          | `dialog_win.cc` (MessageBoxW + PowerShell prompt) | `dialog_linux.cc` (gtk_message_dialog) |
-| **Permissions**   | `permissions_mac.mm` (UN auth)     | `permissions_stub.cc` (always granted) | `permissions_stub.cc` (always granted) |
-| **Dock**          | `dock_mac.mm` (badge / bounce / visible / dock menu storage / reopen handler) | per-backend (FlashWindowEx) + `title_badge.cc` for the badge | per-backend (gtk_window_set_urgency_hint) + `title_badge.cc` for the badge |
-| **Key mapping**   | `keymap_mac.mm` (NSEvent → W3C)    | `keymap_vk.cc` (VK → W3C; CEF uses on every platform) | `keymap_gdk.cc` (GDK → W3C) |
-| **App / context menu** | `menu_mac.mm` (NSMenu)       | `capi/include/win32_menu.h` (HMENU + SetMenu / TrackPopupMenu) | `menu_linux.cc` (GtkMenu / GtkMenuBar) |
-| **Tray icons**    | `tray_mac.mm` (NSStatusItem)       | `tray_win.cc` (Shell_NotifyIcon + WIC + HMENU) | `tray_linux.cc` (libappindicator + g_idle_add) |
-| **Option parsing**| `parse_options.cc` (compiled on every platform; bridges `wef_value_t` → plain structs) |||
-| **Title-prefix badge bookkeeping** | `title_badge.cc` (`ApplyTitlePrefixBadge` — used by CEF Win+Linux and webview Win+Linux for Dock-badge fallback) |||
+| Area                               | macOS                                                                                                            | Windows                                                        | Linux                                                                      |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Notifications**                  | `notifications_mac.mm` (UN)                                                                                      | `notifications_win.cc` (NIIF)                                  | `notifications_linux.cc` (notify-send)                                     |
+| **Dialogs**                        | `dialog_mac.mm` (NSAlert)                                                                                        | `dialog_win.cc` (MessageBoxW + PowerShell prompt)              | `dialog_linux.cc` (gtk_message_dialog)                                     |
+| **Permissions**                    | `permissions_mac.mm` (UN auth)                                                                                   | `permissions_stub.cc` (always granted)                         | `permissions_stub.cc` (always granted)                                     |
+| **Dock**                           | `dock_mac.mm` (badge / bounce / visible / dock menu storage / reopen handler)                                    | per-backend (FlashWindowEx) + `title_badge.cc` for the badge   | per-backend (gtk_window_set_urgency_hint) + `title_badge.cc` for the badge |
+| **Key mapping**                    | `keymap_mac.mm` (NSEvent → W3C)                                                                                  | `keymap_vk.cc` (VK → W3C; CEF uses on every platform)          | `keymap_gdk.cc` (GDK → W3C)                                                |
+| **App / context menu**             | `menu_mac.mm` (NSMenu)                                                                                           | `capi/include/win32_menu.h` (HMENU + SetMenu / TrackPopupMenu) | `menu_linux.cc` (GtkMenu / GtkMenuBar)                                     |
+| **Tray icons**                     | `tray_mac.mm` (NSStatusItem)                                                                                     | `tray_win.cc` (Shell_NotifyIcon + WIC + HMENU)                 | `tray_linux.cc` (libappindicator + g_idle_add)                             |
+| **Option parsing**                 | `parse_options.cc` (compiled on every platform; bridges `wef_value_t` → plain structs)                           |                                                                |                                                                            |
+| **Title-prefix badge bookkeeping** | `title_badge.cc` (`ApplyTitlePrefixBadge` — used by CEF Win+Linux and webview Win+Linux for Dock-badge fallback) |                                                                |                                                                            |
 
 Notes:
 
-- `win32_menu.h` is the older shared header-only library for Windows
-  menu construction; it predates `backend-common` and stays as-is.
-  The two patterns coexist — both backends use `win32_menu` for
-  Windows app/context menus, and `backend-common` for the rest.
-- The dock fallback on Windows/Linux still iterates per-window state
-  inside each backend (because the native title-get/set APIs differ —
-  `SetWindowTextW(HWND)` vs `gtk_window_set_title(GtkWindow*)` vs
-  CEF's `CefWindow::SetTitle`), but the saved-titles bookkeeping and
-  `"(badge) " + title` string concatenation are unified in
-  `wef_common::ApplyTitlePrefixBadge`.
+- `win32_menu.h` is the older shared header-only library for Windows menu
+  construction; it predates `backend-common` and stays as-is. The two patterns
+  coexist — both backends use `win32_menu` for Windows app/context menus, and
+  `backend-common` for the rest.
+- The dock fallback on Windows/Linux still iterates per-window state inside each
+  backend (because the native title-get/set APIs differ — `SetWindowTextW(HWND)`
+  vs `gtk_window_set_title(GtkWindow*)` vs CEF's `CefWindow::SetTitle`), but the
+  saved-titles bookkeeping and `"(badge) " + title` string concatenation are
+  unified in `wef_common::ApplyTitlePrefixBadge`.
 - FlashWindow (Windows) and `gtk_window_set_urgency_hint` (Linux) for
-  `bounce_dock` remain per-backend — each is ~5 LOC and the native
-  call differs enough that an abstraction would cost more than it
-  saves.
+  `bounce_dock` remain per-backend — each is ~5 LOC and the native call differs
+  enough that an abstraction would cost more than it saves.
 
 To add a new shared API: declare it in `wef_backend_common.h`, add the
-implementation file(s) to `backend-common/CMakeLists.txt`, then call it
-from each backend's existing API trampoline.
+implementation file(s) to `backend-common/CMakeLists.txt`, then call it from
+each backend's existing API trampoline.
 
 ### Winit backend code sharing (`backend-winit-common`)
 
