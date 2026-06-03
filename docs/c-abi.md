@@ -66,7 +66,7 @@ The pointers group into:
 - **Notifications** — `show_notification`, `close_notification`.
 - **Permissions** — `query_permission`, `request_permission`.
 
-See [features.md](features.md) for behavior and per-platform differences.
+See [features/](features/) for behavior and per-platform differences.
 
 ## Values (`wef_value_t`)
 
