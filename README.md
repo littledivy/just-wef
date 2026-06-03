@@ -22,21 +22,23 @@ between JS and native code. This modular approach leads to fast development and
 packaging of wef applications.
 
 ```rust
-use wef::{Window, Value};
+use just_wef::{Value, Window};
 
 fn main() {
     Window::new(800, 600)
-      .title("My App")
-      .bind("greet", |call| {
-         let name = call.args.get(0)
-             .and_then(|v| v.as_string())
-             .unwrap_or("World");
-         call.resolve(Value::String(format!("Hello, {}!", name)));
-      })
-      .load_url("https://example.com");
+        .title("My App")
+        .bind("greet", |call| {
+            let name = call
+                .args
+                .first()
+                .and_then(|v| v.as_string())
+                .unwrap_or("World");
+            call.resolve(Value::String(format!("Hello, {name}!")));
+        })
+        .load("index.html");
 }
 
-wef::main!(main);
+just_wef::main!(main);
 ```
 
 ### Docs
