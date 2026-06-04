@@ -1063,24 +1063,20 @@ void WKWebViewBackend::InvokeJsCallback(uint32_t window_id,
                                         uint64_t callback_id,
                                         wef::ValuePtr args) {
   std::string argsJson = json::Serialize(args);
+  std::string script = BuildInvokeCallbackScript(callback_id, argsJson);
   dispatch_async(dispatch_get_main_queue(), ^{
     @autoreleasepool {
       std::lock_guard<std::mutex> lock(windows_mutex_);
+      NSString* js = [NSString stringWithUTF8String:script.c_str()];
       // window_id == 0 means broadcast to all windows
       if (window_id == 0) {
         for (auto& [wid, state] : windows_) {
-          NSString* script = [NSString
-              stringWithFormat:@"window.__wefInvokeCallback(%llu, %s);",
-                               callback_id, argsJson.c_str()];
-          [state.webview evaluateJavaScript:script completionHandler:nil];
+          [state.webview evaluateJavaScript:js completionHandler:nil];
         }
       } else {
         auto* state = GetWindow(window_id);
         if (state) {
-          NSString* script = [NSString
-              stringWithFormat:@"window.__wefInvokeCallback(%llu, %s);",
-                               callback_id, argsJson.c_str()];
-          [state->webview evaluateJavaScript:script completionHandler:nil];
+          [state->webview evaluateJavaScript:js completionHandler:nil];
         }
       }
     }
@@ -1089,23 +1085,19 @@ void WKWebViewBackend::InvokeJsCallback(uint32_t window_id,
 
 void WKWebViewBackend::ReleaseJsCallback(uint32_t window_id,
                                          uint64_t callback_id) {
+  std::string script = BuildReleaseCallbackScript(callback_id);
   dispatch_async(dispatch_get_main_queue(), ^{
     @autoreleasepool {
       std::lock_guard<std::mutex> lock(windows_mutex_);
+      NSString* js = [NSString stringWithUTF8String:script.c_str()];
       if (window_id == 0) {
         for (auto& [wid, state] : windows_) {
-          NSString* script =
-              [NSString stringWithFormat:@"window.__wefReleaseCallback(%llu);",
-                                         callback_id];
-          [state.webview evaluateJavaScript:script completionHandler:nil];
+          [state.webview evaluateJavaScript:js completionHandler:nil];
         }
       } else {
         auto* state = GetWindow(window_id);
         if (state) {
-          NSString* script =
-              [NSString stringWithFormat:@"window.__wefReleaseCallback(%llu);",
-                                         callback_id];
-          [state->webview evaluateJavaScript:script completionHandler:nil];
+          [state->webview evaluateJavaScript:js completionHandler:nil];
         }
       }
     }
@@ -1117,24 +1109,16 @@ void WKWebViewBackend::RespondToJsCall(uint32_t window_id, uint64_t call_id,
                                        wef::ValuePtr error) {
   std::string resultJson = json::Serialize(result);
   std::string errorJson = error ? json::Serialize(error) : "null";
+  std::string script = BuildRespondScript(call_id, resultJson, errorJson,
+                                          static_cast<bool>(error));
   dispatch_async(dispatch_get_main_queue(), ^{
     @autoreleasepool {
       std::lock_guard<std::mutex> lock(windows_mutex_);
       auto* state = GetWindow(window_id);
       if (!state)
         return;
-
-      NSString* script;
-      if (error) {
-        script =
-            [NSString stringWithFormat:@"window.__wefRespond(%llu, null, %s);",
-                                       call_id, errorJson.c_str()];
-      } else {
-        script =
-            [NSString stringWithFormat:@"window.__wefRespond(%llu, %s, null);",
-                                       call_id, resultJson.c_str()];
-      }
-      [state->webview evaluateJavaScript:script completionHandler:nil];
+      NSString* js = [NSString stringWithUTF8String:script.c_str()];
+      [state->webview evaluateJavaScript:js completionHandler:nil];
     }
   });
 }

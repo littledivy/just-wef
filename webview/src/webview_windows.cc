@@ -799,9 +799,8 @@ void WebView2Backend::PostUiTask(void (*task)(void*), void* data) {
 void WebView2Backend::InvokeJsCallback(uint32_t window_id, uint64_t callback_id,
                                        wef::ValuePtr args) {
   std::string argsJson = json::Serialize(args);
-  std::string script = "window.__wefInvokeCallback(" +
-                       std::to_string(callback_id) + ", " + argsJson + ");";
-  std::wstring wscript = Utf8ToWide(script);
+  std::wstring wscript =
+      Utf8ToWide(BuildInvokeCallbackScript(callback_id, argsJson));
   std::lock_guard<std::mutex> lock(windows_mutex_);
   if (window_id == 0) {
     for (auto& [wid, state] : windows_) {
@@ -819,9 +818,7 @@ void WebView2Backend::InvokeJsCallback(uint32_t window_id, uint64_t callback_id,
 
 void WebView2Backend::ReleaseJsCallback(uint32_t window_id,
                                         uint64_t callback_id) {
-  std::string script =
-      "window.__wefReleaseCallback(" + std::to_string(callback_id) + ");";
-  std::wstring wscript = Utf8ToWide(script);
+  std::wstring wscript = Utf8ToWide(BuildReleaseCallbackScript(callback_id));
   std::lock_guard<std::mutex> lock(windows_mutex_);
   if (window_id == 0) {
     for (auto& [wid, state] : windows_) {
@@ -841,16 +838,9 @@ void WebView2Backend::RespondToJsCall(uint32_t window_id, uint64_t call_id,
                                       wef::ValuePtr result,
                                       wef::ValuePtr error) {
   std::string resultJson = json::Serialize(result);
-  std::string script;
-  if (error) {
-    std::string errorJson = json::Serialize(error);
-    script = "window.__wefRespond(" + std::to_string(call_id) + ", null, " +
-             errorJson + ");";
-  } else {
-    script = "window.__wefRespond(" + std::to_string(call_id) + ", " +
-             resultJson + ", null);";
-  }
-  std::wstring wscript = Utf8ToWide(script);
+  std::string errorJson = error ? json::Serialize(error) : "null";
+  std::wstring wscript = Utf8ToWide(BuildRespondScript(
+      call_id, resultJson, errorJson, static_cast<bool>(error)));
   std::lock_guard<std::mutex> lock(windows_mutex_);
   auto* state = GetWindow(window_id);
   if (state && state->webview_ready && state->webview) {

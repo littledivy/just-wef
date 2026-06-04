@@ -870,8 +870,7 @@ void WebKitGTKBackend::InvokeJsCallback(uint32_t window_id,
                                         uint64_t callback_id,
                                         wef::ValuePtr args) {
   std::string argsJson = json::Serialize(args);
-  std::string script = "window.__wefInvokeCallback(" +
-                       std::to_string(callback_id) + ", " + argsJson + ");";
+  std::string script = BuildInvokeCallbackScript(callback_id, argsJson);
   std::lock_guard<std::mutex> lock(windows_mutex_);
   if (window_id == 0) {
     for (auto& [wid, state] : windows_) {
@@ -889,8 +888,7 @@ void WebKitGTKBackend::InvokeJsCallback(uint32_t window_id,
 
 void WebKitGTKBackend::ReleaseJsCallback(uint32_t window_id,
                                          uint64_t callback_id) {
-  std::string script =
-      "window.__wefReleaseCallback(" + std::to_string(callback_id) + ");";
+  std::string script = BuildReleaseCallbackScript(callback_id);
   std::lock_guard<std::mutex> lock(windows_mutex_);
   if (window_id == 0) {
     for (auto& [wid, state] : windows_) {
@@ -912,14 +910,8 @@ void WebKitGTKBackend::RespondToJsCall(uint32_t window_id, uint64_t call_id,
   std::string resultJson = json::Serialize(result);
   std::string errorJson =
       (error && !error->IsNull()) ? json::Serialize(error) : "null";
-  std::string script;
-  if (errorJson == "null") {
-    script = "window.__wefRespond(" + std::to_string(call_id) + ", " +
-             resultJson + ", null);";
-  } else {
-    script = "window.__wefRespond(" + std::to_string(call_id) + ", null, " +
-             errorJson + ");";
-  }
+  std::string script =
+      BuildRespondScript(call_id, resultJson, errorJson, errorJson != "null");
   std::lock_guard<std::mutex> lock(windows_mutex_);
   auto* state = GetWindow(window_id);
   if (state) {

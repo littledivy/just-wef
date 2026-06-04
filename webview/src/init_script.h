@@ -8,7 +8,38 @@
 #ifndef WEF_WEBVIEW_INIT_SCRIPT_H_
 #define WEF_WEBVIEW_INIT_SCRIPT_H_
 
+#include <cstdint>
 #include <string>
+
+// The host->page side of the bridge protocol. These build the JS statements
+// that call the functions defined by BuildInitScript() below, so the function
+// names live in exactly one place. Each platform backend builds the statement
+// and hands it to its own evaluate-JavaScript call.
+
+// window.__wefRespond(callId, result, error): resolve/reject a pending call.
+inline std::string BuildRespondScript(uint64_t call_id,
+                                      const std::string& result_json,
+                                      const std::string& error_json,
+                                      bool is_error) {
+  if (is_error) {
+    return "window.__wefRespond(" + std::to_string(call_id) + ", null, " +
+           error_json + ");";
+  }
+  return "window.__wefRespond(" + std::to_string(call_id) + ", " + result_json +
+         ", null);";
+}
+
+// window.__wefInvokeCallback(callbackId, args): call a stored JS callback.
+inline std::string BuildInvokeCallbackScript(uint64_t callback_id,
+                                             const std::string& args_json) {
+  return "window.__wefInvokeCallback(" + std::to_string(callback_id) + ", " +
+         args_json + ");";
+}
+
+// window.__wefReleaseCallback(callbackId): drop a stored JS callback.
+inline std::string BuildReleaseCallbackScript(uint64_t callback_id) {
+  return "window.__wefReleaseCallback(" + std::to_string(callback_id) + ");";
+}
 
 // Builds the page init script. `ns` is the global namespace the proxy is
 // installed under (e.g. "wef"); `postMessage` is the platform-specific
