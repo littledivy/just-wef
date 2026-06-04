@@ -11,6 +11,7 @@
 #endif
 
 #include <iostream>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 #include <mutex>
@@ -454,13 +455,11 @@ static wef::ValuePtr CefValueToWef(CefRefPtr<CefValue> v) {
     case VTYPE_DICTIONARY: {
       CefRefPtr<CefDictionaryValue> dict = v->GetDictionary();
       if (dict->HasKey("__callback__")) {
-        // Renderer-supplied; don't let a malformed id abort the process.
+        // Renderer-supplied. CEF builds with -fno-exceptions, so parse without
+        // std::stoull (which throws); strtoull returns 0 on a malformed id.
         std::string id = dict->GetString("__callback__").ToString();
-        try {
-          return wef::Value::Callback(static_cast<uint64_t>(std::stoull(id)));
-        } catch (const std::exception&) {
-          return wef::Value::Null();
-        }
+        uint64_t cb_id = std::strtoull(id.c_str(), nullptr, 10);
+        return wef::Value::Callback(cb_id);
       }
       auto out = wef::Value::Dict();
       CefDictionaryValue::KeyList keys;
