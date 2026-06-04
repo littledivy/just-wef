@@ -15,21 +15,11 @@
 #include "include/cef_values.h"
 #include <wef.h>
 
-struct wef_value {
-  CefRefPtr<CefValue> value;
-  bool is_callback;
-  uint64_t callback_id;
-
-  wef_value() : is_callback(false), callback_id(0) {}
-  explicit wef_value(CefRefPtr<CefValue> v)
-      : value(v), is_callback(false), callback_id(0) {}
-  static wef_value* CreateCallback(uint64_t id) {
-    wef_value* v = new wef_value();
-    v->is_callback = true;
-    v->callback_id = id;
-    return v;
-  }
-};
+// wef_value and the value_* marshalling are shared across backends
+// (backend-common/include/wef_value.h). CEF stores values as wef::Value and
+// converts to/from CefValue only at the renderer<->browser IPC boundary
+// (CefValueToWef / WefToCefValue in runtime_loader.cc).
+#include "wef_value.h"
 
 class RuntimeLoader {
  public:
