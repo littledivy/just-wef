@@ -330,7 +330,7 @@ bool WefHandler::OnProcessMessageReceived(
 
   if (name == "wef_call") {
     CefRefPtr<CefListValue> args = message->GetArgumentList();
-    uint64_t call_id = static_cast<uint64_t>(args->GetInt(0));
+    uint64_t call_id = static_cast<uint64_t>(args->GetDouble(0));
     std::string method_path = args->GetString(1).ToString();
     CefRefPtr<CefListValue> callArgs = args->GetList(2);
 
@@ -341,7 +341,7 @@ bool WefHandler::OnProcessMessageReceived(
 
   if (name == "wef_eval_result") {
     CefRefPtr<CefListValue> args = message->GetArgumentList();
-    uint64_t eval_id = static_cast<uint64_t>(args->GetInt(0));
+    uint64_t eval_id = static_cast<uint64_t>(args->GetDouble(0));
     CefRefPtr<CefValue> result = args->GetValue(1);
     std::string error = args->GetString(2).ToString();
     RuntimeLoader::GetInstance()->HandleEvalResult(eval_id, result, error);

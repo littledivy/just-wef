@@ -103,7 +103,8 @@ bool WefPathObject::Execute(const CefString& name, CefRefPtr<CefV8Value> object,
 
   CefRefPtr<CefProcessMessage> msg = CefProcessMessage::Create("wef_call");
   CefRefPtr<CefListValue> msgArgs = msg->GetArgumentList();
-  msgArgs->SetInt(0, static_cast<int>(call_id));
+  // IDs are 64-bit; carry as double (exact to 2^53) since CefValue has no int64.
+  msgArgs->SetDouble(0, static_cast<double>(call_id));
   msgArgs->SetString(1, method_path);
   msgArgs->SetList(2, argsList);
 
@@ -175,7 +176,7 @@ bool WefRenderProcessHandler::OnProcessMessageReceived(
 
   if (name == "wef_response") {
     CefRefPtr<CefListValue> args = message->GetArgumentList();
-    uint64_t call_id = static_cast<uint64_t>(args->GetInt(0));
+    uint64_t call_id = static_cast<uint64_t>(args->GetDouble(0));
     CefRefPtr<CefValue> result = args->GetValue(1);
     std::string error = args->GetString(2).ToString();
 
@@ -200,7 +201,7 @@ bool WefRenderProcessHandler::OnProcessMessageReceived(
 
   if (name == "wef_callback") {
     CefRefPtr<CefListValue> args = message->GetArgumentList();
-    uint64_t callback_id = static_cast<uint64_t>(args->GetInt(0));
+    uint64_t callback_id = static_cast<uint64_t>(args->GetDouble(0));
     CefRefPtr<CefListValue> callbackArgs = args->GetList(1);
 
     auto it = stored_callbacks_.find(callback_id);
@@ -223,14 +224,14 @@ bool WefRenderProcessHandler::OnProcessMessageReceived(
 
   if (name == "wef_eval") {
     CefRefPtr<CefListValue> args = message->GetArgumentList();
-    uint64_t eval_id = static_cast<uint64_t>(args->GetInt(0));
+    uint64_t eval_id = static_cast<uint64_t>(args->GetDouble(0));
     std::string script = args->GetString(1).ToString();
 
     CefRefPtr<CefV8Context> context = frame->GetV8Context();
     CefRefPtr<CefProcessMessage> reply =
         CefProcessMessage::Create("wef_eval_result");
     CefRefPtr<CefListValue> replyArgs = reply->GetArgumentList();
-    replyArgs->SetInt(0, static_cast<int>(eval_id));
+    replyArgs->SetDouble(0, static_cast<double>(eval_id));
 
     if (context && context->Enter()) {
       CefRefPtr<CefV8Value> retval;
@@ -259,7 +260,7 @@ bool WefRenderProcessHandler::OnProcessMessageReceived(
 
   if (name == "wef_release_callback") {
     CefRefPtr<CefListValue> args = message->GetArgumentList();
-    uint64_t callback_id = static_cast<uint64_t>(args->GetInt(0));
+    uint64_t callback_id = static_cast<uint64_t>(args->GetDouble(0));
 
     stored_callbacks_.erase(callback_id);
     return true;

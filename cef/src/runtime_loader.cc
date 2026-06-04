@@ -133,7 +133,7 @@ static void Backend_ExecuteJs(void* data, uint32_t window_id,
                     CefRefPtr<CefProcessMessage> msg =
                         CefProcessMessage::Create("wef_eval");
                     CefRefPtr<CefListValue> args = msg->GetArgumentList();
-                    args->SetInt(0, static_cast<int>(id));
+                    args->SetDouble(0, static_cast<double>(id));
                     args->SetString(1, s);
                     b->GetMainFrame()->SendProcessMessage(PID_RENDERER, msg);
                   },
@@ -563,9 +563,23 @@ static char** Backend_ValueDictKeys(wef_value_t* dict, size_t* count_out) {
     return nullptr;
 
   char** result = static_cast<char**>(malloc(sizeof(char*) * keys.size()));
+  if (!result) {
+    if (count_out)
+      *count_out = 0;
+    return nullptr;
+  }
   for (size_t i = 0; i < keys.size(); ++i) {
     std::string key = keys[i].ToString();
     result[i] = static_cast<char*>(malloc(key.size() + 1));
+    if (!result[i]) {
+      // Roll back rather than hand back a half-built array.
+      for (size_t j = 0; j < i; ++j)
+        free(result[j]);
+      free(result);
+      if (count_out)
+        *count_out = 0;
+      return nullptr;
+    }
     memcpy(result[i], key.c_str(), key.size() + 1);
   }
   return result;
@@ -697,7 +711,8 @@ static void Backend_JsCallRespond(void* data, uint64_t call_id,
 
   CefRefPtr<CefProcessMessage> msg = CefProcessMessage::Create("wef_response");
   CefRefPtr<CefListValue> args = msg->GetArgumentList();
-  args->SetInt(0, static_cast<int>(call_id));
+  // IDs are 64-bit; carry as double (exact to 2^53) since CefValue has no int64.
+  args->SetDouble(0, static_cast<double>(call_id));
 
   if (result && result->value) {
     args->SetValue(1, result->value);
@@ -729,7 +744,7 @@ static void Backend_InvokeJsCallback(void* data, uint64_t callback_id,
 
   CefRefPtr<CefProcessMessage> msg = CefProcessMessage::Create("wef_callback");
   CefRefPtr<CefListValue> msgArgs = msg->GetArgumentList();
-  msgArgs->SetInt(0, static_cast<int>(callback_id));
+  msgArgs->SetDouble(0, static_cast<double>(callback_id));
 
   if (args && args->value && args->value->GetType() == VTYPE_LIST) {
     msgArgs->SetList(1, args->value->GetList());
@@ -803,7 +818,7 @@ static void Backend_ReleaseJsCallback(void* data, uint64_t callback_id) {
   CefRefPtr<CefProcessMessage> msg =
       CefProcessMessage::Create("wef_release_callback");
   CefRefPtr<CefListValue> msgArgs = msg->GetArgumentList();
-  msgArgs->SetInt(0, static_cast<int>(callback_id));
+  msgArgs->SetDouble(0, static_cast<double>(callback_id));
 
   loader->ForEachBrowser([&msg](CefRefPtr<CefBrowser> browser) {
     CefPostTask(

@@ -302,18 +302,35 @@ static char** Backend_ValueDictKeys(wef_value_t* dict, size_t* count_out) {
     return nullptr;
   }
   const auto& d = dict->value->GetDict();
-  if (count_out)
-    *count_out = d.size();
-  if (d.empty())
+  if (d.empty()) {
+    if (count_out)
+      *count_out = 0;
     return nullptr;
+  }
 
   char** result = static_cast<char**>(malloc(sizeof(char*) * d.size()));
+  if (!result) {
+    if (count_out)
+      *count_out = 0;
+    return nullptr;
+  }
   size_t i = 0;
   for (const auto& pair : d) {
     result[i] = static_cast<char*>(malloc(pair.first.size() + 1));
+    if (!result[i]) {
+      // Roll back rather than hand back a half-built array.
+      for (size_t j = 0; j < i; ++j)
+        free(result[j]);
+      free(result);
+      if (count_out)
+        *count_out = 0;
+      return nullptr;
+    }
     memcpy(result[i], pair.first.c_str(), pair.first.size() + 1);
     ++i;
   }
+  if (count_out)
+    *count_out = d.size();
   return result;
 }
 

@@ -234,8 +234,13 @@ inline wef::ValuePtr ParseObject(const char*& p) {
   const auto& d = dict->GetDict();
   auto it = d.find("__callback__");
   if (it != d.end() && it->second->IsString()) {
-    uint64_t id = std::stoull(it->second->GetString());
-    return wef::Value::Callback(id);
+    // JS-supplied; a malformed id must not throw out of the JSON parser.
+    try {
+      uint64_t id = std::stoull(it->second->GetString());
+      return wef::Value::Callback(id);
+    } catch (const std::exception&) {
+      return wef::Value::Null();
+    }
   }
   it = d.find("__binary__");
   if (it != d.end() && it->second->IsString()) {
