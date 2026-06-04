@@ -103,7 +103,8 @@ bool WefPathObject::Execute(const CefString& name, CefRefPtr<CefV8Value> object,
 
   CefRefPtr<CefProcessMessage> msg = CefProcessMessage::Create("wef_call");
   CefRefPtr<CefListValue> msgArgs = msg->GetArgumentList();
-  // IDs are 64-bit; carry as double (exact to 2^53) since CefValue has no int64.
+  // IDs are 64-bit; carry as double (exact to 2^53) since CefValue has no
+  // int64.
   msgArgs->SetDouble(0, static_cast<double>(call_id));
   msgArgs->SetString(1, method_path);
   msgArgs->SetList(2, argsList);

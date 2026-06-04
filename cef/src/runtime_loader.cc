@@ -711,7 +711,8 @@ static void Backend_JsCallRespond(void* data, uint64_t call_id,
 
   CefRefPtr<CefProcessMessage> msg = CefProcessMessage::Create("wef_response");
   CefRefPtr<CefListValue> args = msg->GetArgumentList();
-  // IDs are 64-bit; carry as double (exact to 2^53) since CefValue has no int64.
+  // IDs are 64-bit; carry as double (exact to 2^53) since CefValue has no
+  // int64.
   args->SetDouble(0, static_cast<double>(call_id));
 
   if (result && result->value) {
