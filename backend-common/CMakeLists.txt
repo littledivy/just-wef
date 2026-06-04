@@ -35,6 +35,7 @@ set(WEF_COMMON_SRCS
   src/parse_options.cc
   src/keymap_vk.cc
   src/title_badge.cc
+  src/wef_value.cc
 )
 
 if(APPLE)
