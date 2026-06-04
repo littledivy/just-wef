@@ -7,6 +7,7 @@
 #include "runtime_loader.h"
 #include "wef_backend_common.h"
 #include "wef_json.h"
+#include "init_script.h"
 
 #include <atomic>
 #include <map>
@@ -323,108 +324,6 @@ int NSButtonToWef(NSInteger buttonNumber) {
     default:
       return WEF_MOUSE_BUTTON_LEFT;
   }
-}
-
-std::string BuildInitScript(const std::string& ns,
-                            const std::string& postMessage) {
-  return R"JS(
-(function() {
-  const pendingCalls = new Map();
-  let nextCallId = 1;
-
-  function createWefProxy(path = []) {
-    return new Proxy(function() {}, {
-      get(target, prop) {
-        if (prop === 'then' || prop === 'catch' || prop === 'finally' ||
-            prop === 'constructor' || prop === Symbol.toStringTag) {
-          return undefined;
-        }
-        return createWefProxy([...path, prop]);
-      },
-      apply(target, thisArg, args) {
-        return new Promise((resolve, reject) => {
-          const callId = nextCallId++;
-          pendingCalls.set(callId, { resolve, reject });
-
-          const processedArgs = args.map(arg => {
-            if (typeof arg === 'function') {
-              const cbId = nextCallId++;
-              window.__wefCallbacks = window.__wefCallbacks || {};
-              window.__wefCallbacks[cbId] = arg;
-              return { __callback__: String(cbId) };
-            }
-            if (arg instanceof ArrayBuffer) {
-              const bytes = new Uint8Array(arg);
-              let binary = '';
-              bytes.forEach(b => binary += String.fromCharCode(b));
-              return { __binary__: btoa(binary) };
-            }
-            if (arg instanceof Uint8Array) {
-              let binary = '';
-              arg.forEach(b => binary += String.fromCharCode(b));
-              return { __binary__: btoa(binary) };
-            }
-            return arg;
-          });
-
-          )JS" +
-         postMessage + R"JS(
-        });
-      }
-    });
-  }
-
-  window[")JS" +
-         ns + R"JS("] = createWefProxy();
-
-  window.__wefRespond = function(callId, result, error) {
-    const pending = pendingCalls.get(callId);
-    if (pending) {
-      pendingCalls.delete(callId);
-      if (error) {
-        pending.reject(new Error(error));
-      } else {
-        function convertBinary(obj) {
-          if (obj && typeof obj === 'object') {
-            if (obj.__binary__) {
-              const binary = atob(obj.__binary__);
-              const bytes = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
-              }
-              return bytes.buffer;
-            }
-            if (Array.isArray(obj)) {
-              return obj.map(convertBinary);
-            }
-            const result = {};
-            for (const key in obj) {
-              result[key] = convertBinary(obj[key]);
-            }
-            return result;
-          }
-          return obj;
-        }
-        pending.resolve(convertBinary(result));
-      }
-    }
-  };
-
-  window.__wefInvokeCallback = function(callbackId, args) {
-    const cb = window.__wefCallbacks && window.__wefCallbacks[callbackId];
-    if (cb) {
-      cb.apply(null, args);
-    }
-  };
-
-  window.__wefReleaseCallback = function(callbackId) {
-    if (window.__wefCallbacks) {
-      delete window.__wefCallbacks[callbackId];
-    }
-  };
-
-})();
-)JS";
 }
 
 }  // namespace
@@ -1164,24 +1063,20 @@ void WKWebViewBackend::InvokeJsCallback(uint32_t window_id,
                                         uint64_t callback_id,
                                         wef::ValuePtr args) {
   std::string argsJson = json::Serialize(args);
+  std::string script = BuildInvokeCallbackScript(callback_id, argsJson);
   dispatch_async(dispatch_get_main_queue(), ^{
     @autoreleasepool {
       std::lock_guard<std::mutex> lock(windows_mutex_);
+      NSString* js = [NSString stringWithUTF8String:script.c_str()];
       // window_id == 0 means broadcast to all windows
       if (window_id == 0) {
         for (auto& [wid, state] : windows_) {
-          NSString* script = [NSString
-              stringWithFormat:@"window.__wefInvokeCallback(%llu, %s);",
-                               callback_id, argsJson.c_str()];
-          [state.webview evaluateJavaScript:script completionHandler:nil];
+          [state.webview evaluateJavaScript:js completionHandler:nil];
         }
       } else {
         auto* state = GetWindow(window_id);
         if (state) {
-          NSString* script = [NSString
-              stringWithFormat:@"window.__wefInvokeCallback(%llu, %s);",
-                               callback_id, argsJson.c_str()];
-          [state->webview evaluateJavaScript:script completionHandler:nil];
+          [state->webview evaluateJavaScript:js completionHandler:nil];
         }
       }
     }
@@ -1190,23 +1085,19 @@ void WKWebViewBackend::InvokeJsCallback(uint32_t window_id,
 
 void WKWebViewBackend::ReleaseJsCallback(uint32_t window_id,
                                          uint64_t callback_id) {
+  std::string script = BuildReleaseCallbackScript(callback_id);
   dispatch_async(dispatch_get_main_queue(), ^{
     @autoreleasepool {
       std::lock_guard<std::mutex> lock(windows_mutex_);
+      NSString* js = [NSString stringWithUTF8String:script.c_str()];
       if (window_id == 0) {
         for (auto& [wid, state] : windows_) {
-          NSString* script =
-              [NSString stringWithFormat:@"window.__wefReleaseCallback(%llu);",
-                                         callback_id];
-          [state.webview evaluateJavaScript:script completionHandler:nil];
+          [state.webview evaluateJavaScript:js completionHandler:nil];
         }
       } else {
         auto* state = GetWindow(window_id);
         if (state) {
-          NSString* script =
-              [NSString stringWithFormat:@"window.__wefReleaseCallback(%llu);",
-                                         callback_id];
-          [state->webview evaluateJavaScript:script completionHandler:nil];
+          [state->webview evaluateJavaScript:js completionHandler:nil];
         }
       }
     }
@@ -1218,24 +1109,16 @@ void WKWebViewBackend::RespondToJsCall(uint32_t window_id, uint64_t call_id,
                                        wef::ValuePtr error) {
   std::string resultJson = json::Serialize(result);
   std::string errorJson = error ? json::Serialize(error) : "null";
+  std::string script = BuildRespondScript(call_id, resultJson, errorJson,
+                                          static_cast<bool>(error));
   dispatch_async(dispatch_get_main_queue(), ^{
     @autoreleasepool {
       std::lock_guard<std::mutex> lock(windows_mutex_);
       auto* state = GetWindow(window_id);
       if (!state)
         return;
-
-      NSString* script;
-      if (error) {
-        script =
-            [NSString stringWithFormat:@"window.__wefRespond(%llu, null, %s);",
-                                       call_id, errorJson.c_str()];
-      } else {
-        script =
-            [NSString stringWithFormat:@"window.__wefRespond(%llu, %s, null);",
-                                       call_id, resultJson.c_str()];
-      }
-      [state->webview evaluateJavaScript:script completionHandler:nil];
+      NSString* js = [NSString stringWithUTF8String:script.c_str()];
+      [state->webview evaluateJavaScript:js completionHandler:nil];
     }
   });
 }
