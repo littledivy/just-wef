@@ -2526,23 +2526,32 @@ mod tests {
     assert_eq!(
       WindowOptions {
         frameless: true,
-        no_activate: false
+        ..Default::default()
       }
       .to_flags(),
       WEF_WINDOW_FLAG_FRAMELESS
     );
     assert_eq!(
       WindowOptions {
-        frameless: false,
-        no_activate: true
+        no_activate: true,
+        ..Default::default()
       }
       .to_flags(),
       WEF_WINDOW_FLAG_NO_ACTIVATE
     );
     assert_eq!(
       WindowOptions {
+        transparent_titlebar: true,
+        ..Default::default()
+      }
+      .to_flags(),
+      WEF_WINDOW_FLAG_TRANSPARENT_TITLEBAR
+    );
+    assert_eq!(
+      WindowOptions {
         frameless: true,
-        no_activate: true
+        no_activate: true,
+        ..Default::default()
       }
       .to_flags(),
       WEF_WINDOW_FLAG_FRAMELESS | WEF_WINDOW_FLAG_NO_ACTIVATE

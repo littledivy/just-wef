@@ -43,15 +43,13 @@ void WefWindowDelegate::OnWindowCreated(CefRefPtr<CefWindow> window) {
   // (WEF_WINDOW_FLAG_NO_ACTIVATE) are reconfigured before the first Show()
   // so they float without stealing focus from the foreground app.
   bool no_activate = (flags_ & WEF_WINDOW_FLAG_NO_ACTIVATE) != 0;
-  bool transparent_titlebar =
-      (flags_ & WEF_WINDOW_FLAG_TRANSPARENT_TITLEBAR) != 0;
   CefWindowHandle handle = window->GetWindowHandle();
   if (handle && wef_id_ > 0) {
 #if defined(__APPLE__)
     if (no_activate) {
       ConfigureNSWindowAsPanelForCefHandle(handle);
     }
-    if (transparent_titlebar) {
+    if ((flags_ & WEF_WINDOW_FLAG_TRANSPARENT_TITLEBAR) != 0) {
       ConfigureNSWindowTransparentTitlebarForCefHandle(handle);
     }
     RegisterNSWindowForCefHandle(handle, wef_id_);
