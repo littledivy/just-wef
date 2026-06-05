@@ -1,7 +1,7 @@
 # C ABI
 
 laufey is built around a single C header,
-[`capi/include/laufey.h`](https://github.com/littledivy/just-wef/blob/main/capi/include/laufey.h).
+[`capi/include/laufey.h`](https://github.com/littledivy/laufey/blob/main/capi/include/laufey.h).
 It defines the boundary between a **backend** (a native executable embedding a
 browser engine) and a **runtime** (a shared library holding the application
 logic). The backend implements the ABI; the runtime consumes it.

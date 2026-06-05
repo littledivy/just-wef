@@ -10,7 +10,7 @@ application logic (runtimes). Prebuilt backends for [CEF](./cef) and the system
 [WebView](./webview) implement the `laufey_backend_api_t` interface defined in
 [`capi/include/laufey.h`](capi/include/laufey.h), and a [Winit](./winit) backend
 handles windowing without a web engine. (A Servo-based backend lives on the
-[`servo`](https://github.com/littledivy/wef/tree/servo) branch.)
+[`servo`](https://github.com/littledivy/laufey/tree/servo) branch.)
 
 Runtimes are shared libraries compiled with user application logic. When the
 backend starts, it loads the runtime dylib and hands control to the runtime. The

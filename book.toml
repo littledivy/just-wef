@@ -6,8 +6,8 @@ src = "docs"
 language = "en"
 
 [output.html]
-git-repository-url = "https://github.com/littledivy/just-wef"
-edit-url-template = "https://github.com/littledivy/just-wef/edit/main/{path}"
+git-repository-url = "https://github.com/littledivy/laufey"
+edit-url-template = "https://github.com/littledivy/laufey/edit/main/{path}"
 default-theme = "light"
 preferred-dark-theme = "navy"
 no-section-label = true

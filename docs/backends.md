@@ -9,9 +9,9 @@ given engine can't express on a given OS (see
 
 | Backend                                                             | Engine        | Process model | Bundled | JS bridge |
 | ------------------------------------------------------------------- | ------------- | ------------- | ------- | --------- |
-| [CEF](https://github.com/littledivy/just-wef/tree/main/cef)         | Chromium 144  | multi-process | yes     | yes       |
-| [WebView](https://github.com/littledivy/just-wef/tree/main/webview) | system native | single        | no      | yes       |
-| [Winit](https://github.com/littledivy/just-wef/tree/main/winit)     | none          | single        | n/a     | no        |
+| [CEF](https://github.com/littledivy/laufey/tree/main/cef)         | Chromium 144  | multi-process | yes     | yes       |
+| [WebView](https://github.com/littledivy/laufey/tree/main/webview) | system native | single        | no      | yes       |
+| [Winit](https://github.com/littledivy/laufey/tree/main/winit)     | none          | single        | n/a     | no        |
 
 Platform support is x86_64 + aarch64 on macOS and Linux, x86_64 on Windows.
 Android is not supported.
@@ -24,7 +24,7 @@ utility subprocesses, with the same rendering and DevTools you get in Chrome.
 The engine is bundled into the app, so binaries are large but rendering is
 identical everywhere and independent of the host OS.
 
-Sources live in [`cef/`](https://github.com/littledivy/just-wef/tree/main/cef);
+Sources live in [`cef/`](https://github.com/littledivy/laufey/tree/main/cef);
 shared native features come from `backend-common`. On Windows the backend links
 the static CRT (`/MT`), so everything it links — including `backend-common` — is
 built `/MT`.
@@ -42,7 +42,7 @@ apps stay small, at the cost of rendering that varies by OS and engine version.
 Single-process.
 
 Sources live in
-[`webview/`](https://github.com/littledivy/just-wef/tree/main/webview), one file
+[`webview/`](https://github.com/littledivy/laufey/tree/main/webview), one file
 per platform (`webview_macos.mm`, `webview_windows.cc`, `webview_linux.cc`),
 sharing `backend-common` for menus, tray, dialogs, dock, and notifications.
 
@@ -53,18 +53,18 @@ Engine-free. It creates native windows via
 content — GPU surfaces, custom renderers — without loading a web engine. There
 is no JS bridge; `get_window_handle` / `get_display_handle` expose the raw
 handles needed to create a rendering surface. Sources in
-[`winit/`](https://github.com/littledivy/just-wef/tree/main/winit).
+[`winit/`](https://github.com/littledivy/laufey/tree/main/winit).
 
 ## Servo (experimental)
 
 A [Servo](https://servo.org)-based backend is preserved on the
-[`servo`](https://github.com/littledivy/wef/tree/servo) branch for future work
+[`servo`](https://github.com/littledivy/laufey/tree/servo) branch for future work
 and is not part of the mainline build.
 
 ## backend-common
 
 CEF and WebView share their native-API implementations (menus, tray, dock,
 dialogs, notifications, key mapping) in
-[`backend-common/`](https://github.com/littledivy/just-wef/tree/main/backend-common),
+[`backend-common/`](https://github.com/littledivy/laufey/tree/main/backend-common),
 included as a CMake subdirectory by each backend. The winit backend shares its
 non-engine pieces through `backend-winit-common` instead.

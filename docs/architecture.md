@@ -24,7 +24,7 @@ defined in `capi/include/laufey.h`.
 | `winit/`   | None (winit only, no web content)                 | Rust (winit)       | Created directly     |
 
 An experimental Servo backend lives on the
-[`servo`](https://github.com/littledivy/wef/tree/servo) branch.
+[`servo`](https://github.com/littledivy/laufey/tree/servo) branch.
 
 ### Runtime (capi)
 

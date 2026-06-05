@@ -43,4 +43,4 @@ laufey::main!(main);
 - [Building](building.md) — prerequisites and `make` targets.
 
 The source lives at
-[github.com/littledivy/just-wef](https://github.com/littledivy/just-wef).
+[github.com/littledivy/laufey](https://github.com/littledivy/laufey).
