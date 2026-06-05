@@ -25,7 +25,11 @@ pub const LAUFEY_PERMISSION_STATUS_UNSUPPORTED: c_int = 3;
 pub type LaufeyPermissionCallbackFn = unsafe extern "C" fn(*mut c_void, c_int);
 
 #[cfg(not(target_os = "macos"))]
-fn fire(cb: Option<LaufeyPermissionCallbackFn>, ud: *mut c_void, status: c_int) {
+fn fire(
+  cb: Option<LaufeyPermissionCallbackFn>,
+  ud: *mut c_void,
+  status: c_int,
+) {
   if let Some(cb) = cb {
     unsafe { cb(ud, status) };
   }

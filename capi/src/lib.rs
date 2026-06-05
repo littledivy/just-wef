@@ -1722,8 +1722,13 @@ pub fn prompt(
   message: &str,
   default_value: &str,
 ) -> Option<String> {
-  let (confirmed, input) =
-    show_dialog_blocking(0, LAUFEY_DIALOG_PROMPT, title, message, default_value);
+  let (confirmed, input) = show_dialog_blocking(
+    0,
+    LAUFEY_DIALOG_PROMPT,
+    title,
+    message,
+    default_value,
+  );
   if confirmed {
     input
   } else {

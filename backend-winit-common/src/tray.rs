@@ -16,7 +16,7 @@ use tray_icon::{
   TrayIconEventReceiver,
 };
 
-use crate::{ParsedMenuItem, LaufeyMenuClickFn};
+use crate::{LaufeyMenuClickFn, ParsedMenuItem};
 
 pub type LaufeyTrayClickFn = unsafe extern "C" fn(*mut c_void, u32);
 

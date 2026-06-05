@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use winit::window::Window;
 
-use crate::{ParsedMenuItem, LaufeyMenuClickFn};
+use crate::{LaufeyMenuClickFn, ParsedMenuItem};
 
 pub const LAUFEY_DOCK_BOUNCE_INFORMATIONAL: c_int = 10;
 pub const LAUFEY_DOCK_BOUNCE_CRITICAL: c_int = 0;

@@ -53,10 +53,10 @@ pub struct LaufeyValue {
 }
 
 pub type LaufeyJsCallFn = unsafe extern "C" fn(
-  *mut c_void,   // user_data
-  u32,           // window_id
-  u64,           // call_id
-  *const c_char, // method_path
+  *mut c_void,      // user_data
+  u32,              // window_id
+  u64,              // call_id
+  *const c_char,    // method_path
   *mut LaufeyValue, // args
 );
 pub type LaufeyJsResultFn =
@@ -195,17 +195,20 @@ pub struct LaufeyBackendApi {
   pub value_list_size: Option<unsafe extern "C" fn(*mut LaufeyValue) -> usize>,
   pub value_list_get:
     Option<unsafe extern "C" fn(*mut LaufeyValue, usize) -> *mut LaufeyValue>,
-  pub value_dict_get:
-    Option<unsafe extern "C" fn(*mut LaufeyValue, *const c_char) -> *mut LaufeyValue>,
+  pub value_dict_get: Option<
+    unsafe extern "C" fn(*mut LaufeyValue, *const c_char) -> *mut LaufeyValue,
+  >,
   pub value_dict_has:
     Option<unsafe extern "C" fn(*mut LaufeyValue, *const c_char) -> bool>,
   pub value_dict_size: Option<unsafe extern "C" fn(*mut LaufeyValue) -> usize>,
-  pub value_dict_keys:
-    Option<unsafe extern "C" fn(*mut LaufeyValue, *mut usize) -> *mut *mut c_char>,
+  pub value_dict_keys: Option<
+    unsafe extern "C" fn(*mut LaufeyValue, *mut usize) -> *mut *mut c_char,
+  >,
   pub value_free_keys: Option<unsafe extern "C" fn(*mut *mut c_char, usize)>,
   pub value_get_binary:
     Option<unsafe extern "C" fn(*mut LaufeyValue, *mut usize) -> *const c_void>,
-  pub value_get_callback_id: Option<unsafe extern "C" fn(*mut LaufeyValue) -> u64>,
+  pub value_get_callback_id:
+    Option<unsafe extern "C" fn(*mut LaufeyValue) -> u64>,
   pub value_null: Option<unsafe extern "C" fn(*mut c_void) -> *mut LaufeyValue>,
   pub value_bool:
     Option<unsafe extern "C" fn(*mut c_void, bool) -> *mut LaufeyValue>,
@@ -213,8 +216,9 @@ pub struct LaufeyBackendApi {
     Option<unsafe extern "C" fn(*mut c_void, c_int) -> *mut LaufeyValue>,
   pub value_double:
     Option<unsafe extern "C" fn(*mut c_void, f64) -> *mut LaufeyValue>,
-  pub value_string:
-    Option<unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut LaufeyValue>,
+  pub value_string: Option<
+    unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut LaufeyValue,
+  >,
   pub value_list: Option<unsafe extern "C" fn(*mut c_void) -> *mut LaufeyValue>,
   pub value_dict: Option<unsafe extern "C" fn(*mut c_void) -> *mut LaufeyValue>,
   pub value_binary: Option<
@@ -222,10 +226,15 @@ pub struct LaufeyBackendApi {
   >,
   pub value_list_append:
     Option<unsafe extern "C" fn(*mut LaufeyValue, *mut LaufeyValue) -> bool>,
-  pub value_list_set:
-    Option<unsafe extern "C" fn(*mut LaufeyValue, usize, *mut LaufeyValue) -> bool>,
+  pub value_list_set: Option<
+    unsafe extern "C" fn(*mut LaufeyValue, usize, *mut LaufeyValue) -> bool,
+  >,
   pub value_dict_set: Option<
-    unsafe extern "C" fn(*mut LaufeyValue, *const c_char, *mut LaufeyValue) -> bool,
+    unsafe extern "C" fn(
+      *mut LaufeyValue,
+      *const c_char,
+      *mut LaufeyValue,
+    ) -> bool,
   >,
   pub value_free: Option<unsafe extern "C" fn(*mut LaufeyValue)>,
   pub set_js_call_handler:
@@ -243,7 +252,11 @@ pub struct LaufeyBackendApi {
   pub get_window_handle_type:
     Option<unsafe extern "C" fn(*mut c_void, u32) -> c_int>,
   pub set_keyboard_event_handler: Option<
-    unsafe extern "C" fn(*mut c_void, Option<LaufeyKeyboardEventFn>, *mut c_void),
+    unsafe extern "C" fn(
+      *mut c_void,
+      Option<LaufeyKeyboardEventFn>,
+      *mut c_void,
+    ),
   >,
   pub set_mouse_click_handler: Option<
     unsafe extern "C" fn(*mut c_void, Option<LaufeyMouseClickFn>, *mut c_void),
@@ -251,8 +264,9 @@ pub struct LaufeyBackendApi {
   pub set_mouse_move_handler: Option<
     unsafe extern "C" fn(*mut c_void, Option<LaufeyMouseMoveFn>, *mut c_void),
   >,
-  pub set_wheel_handler:
-    Option<unsafe extern "C" fn(*mut c_void, Option<LaufeyWheelFn>, *mut c_void)>,
+  pub set_wheel_handler: Option<
+    unsafe extern "C" fn(*mut c_void, Option<LaufeyWheelFn>, *mut c_void),
+  >,
   pub set_cursor_enter_leave_handler: Option<
     unsafe extern "C" fn(
       *mut c_void,
@@ -263,12 +277,18 @@ pub struct LaufeyBackendApi {
   pub set_focused_handler: Option<
     unsafe extern "C" fn(*mut c_void, Option<LaufeyFocusedFn>, *mut c_void),
   >,
-  pub set_resize_handler:
-    Option<unsafe extern "C" fn(*mut c_void, Option<LaufeyResizeFn>, *mut c_void)>,
-  pub set_move_handler:
-    Option<unsafe extern "C" fn(*mut c_void, Option<LaufeyMoveFn>, *mut c_void)>,
+  pub set_resize_handler: Option<
+    unsafe extern "C" fn(*mut c_void, Option<LaufeyResizeFn>, *mut c_void),
+  >,
+  pub set_move_handler: Option<
+    unsafe extern "C" fn(*mut c_void, Option<LaufeyMoveFn>, *mut c_void),
+  >,
   pub set_close_requested_handler: Option<
-    unsafe extern "C" fn(*mut c_void, Option<LaufeyCloseRequestedFn>, *mut c_void),
+    unsafe extern "C" fn(
+      *mut c_void,
+      Option<LaufeyCloseRequestedFn>,
+      *mut c_void,
+    ),
   >,
   pub poll_js_calls: Option<unsafe extern "C" fn(*mut c_void)>,
   pub set_js_call_notify: Option<
@@ -1082,7 +1102,8 @@ pub fn store_window_handles(window_id: u32, window: &Window) {
       #[cfg(target_os = "macos")]
       RawWindowHandle::AppKit(handle) => {
         handle_ptr = handle.ns_view.as_ptr();
-        WINDOW_HANDLE_TYPE.store(LAUFEY_WINDOW_HANDLE_APPKIT, Ordering::Release);
+        WINDOW_HANDLE_TYPE
+          .store(LAUFEY_WINDOW_HANDLE_APPKIT, Ordering::Release);
       }
       #[cfg(target_os = "windows")]
       RawWindowHandle::Win32(handle) => {
@@ -1097,7 +1118,8 @@ pub fn store_window_handles(window_id: u32, window: &Window) {
       #[cfg(target_os = "linux")]
       RawWindowHandle::Wayland(handle) => {
         handle_ptr = handle.surface.as_ptr();
-        WINDOW_HANDLE_TYPE.store(LAUFEY_WINDOW_HANDLE_WAYLAND, Ordering::Release);
+        WINDOW_HANDLE_TYPE
+          .store(LAUFEY_WINDOW_HANDLE_WAYLAND, Ordering::Release);
       }
       _ => {}
     }
@@ -1135,7 +1157,8 @@ pub fn remove_window_handles(window_id: u32) {
 
 // --- Menu types ---
 
-pub type LaufeyMenuClickFn = unsafe extern "C" fn(*mut c_void, u32, *const c_char);
+pub type LaufeyMenuClickFn =
+  unsafe extern "C" fn(*mut c_void, u32, *const c_char);
 
 pub enum ParsedMenuItem {
   Item {
@@ -1169,7 +1192,10 @@ pub struct PendingContextMenu {
 }
 
 /// Helper to read a string from a LaufeyValue dict entry.
-unsafe fn laufey_dict_string(dict: *mut LaufeyValue, key: &str) -> Option<String> {
+unsafe fn laufey_dict_string(
+  dict: *mut LaufeyValue,
+  key: &str,
+) -> Option<String> {
   let c_key = CString::new(key).ok()?;
   let val = value_dict_get(dict, c_key.as_ptr());
   if val.is_null() || !value_is_string(val) {
@@ -1515,7 +1541,8 @@ pub struct EventHandlers {
   pub mouse_click_handler: Mutex<Option<(LaufeyMouseClickFn, usize)>>,
   pub mouse_move_handler: Mutex<Option<(LaufeyMouseMoveFn, usize)>>,
   pub wheel_handler: Mutex<Option<(LaufeyWheelFn, usize)>>,
-  pub cursor_enter_leave_handler: Mutex<Option<(LaufeyCursorEnterLeaveFn, usize)>>,
+  pub cursor_enter_leave_handler:
+    Mutex<Option<(LaufeyCursorEnterLeaveFn, usize)>>,
   pub focused_handler: Mutex<Option<(LaufeyFocusedFn, usize)>>,
   pub resize_handler: Mutex<Option<(LaufeyResizeFn, usize)>>,
   pub move_handler: Mutex<Option<(LaufeyMoveFn, usize)>>,
@@ -3271,13 +3298,14 @@ pub fn load_and_start_runtime(api: LaufeyBackendApi) {
           }
         };
 
-        let init: Symbol<RuntimeInitFn> = match lib.get(b"laufey_runtime_init\0") {
-          Ok(f) => f,
-          Err(e) => {
-            eprintln!("Failed to find laufey_runtime_init: {}", e);
-            return;
-          }
-        };
+        let init: Symbol<RuntimeInitFn> =
+          match lib.get(b"laufey_runtime_init\0") {
+            Ok(f) => f,
+            Err(e) => {
+              eprintln!("Failed to find laufey_runtime_init: {}", e);
+              return;
+            }
+          };
 
         let start: Symbol<RuntimeStartFn> =
           match lib.get(b"laufey_runtime_start\0") {
