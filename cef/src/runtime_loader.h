@@ -431,6 +431,10 @@ bool IsNSWindowResizable(void* cef_handle);
 // normal windows, joins all spaces, and doesn't steal focus from the
 // foreground app when shown.
 void ConfigureNSWindowAsPanelForCefHandle(void* cef_handle);
+// Give the window a transparent, full-size-content-view title bar so the web
+// content draws under it and the traffic-light buttons overlay the page
+// (Electron `titleBarStyle: 'hidden'`). For WEF_WINDOW_FLAG_TRANSPARENT_TITLEBAR.
+void ConfigureNSWindowTransparentTitlebarForCefHandle(void* cef_handle);
 #endif
 
 #ifdef _WIN32

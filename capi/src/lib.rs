@@ -35,6 +35,7 @@ pub const WEF_API_VERSION: u32 = 25;
 /// Mirror the `WEF_WINDOW_FLAG_*` constants in `wef.h`.
 pub const WEF_WINDOW_FLAG_FRAMELESS: u32 = 1 << 0;
 pub const WEF_WINDOW_FLAG_NO_ACTIVATE: u32 = 1 << 1;
+pub const WEF_WINDOW_FLAG_TRANSPARENT_TITLEBAR: u32 = 1 << 2;
 
 pub const WEF_WINDOW_HANDLE_UNKNOWN: i32 = 0;
 pub const WEF_WINDOW_HANDLE_APPKIT: i32 = 1;
@@ -500,6 +501,10 @@ pub struct WindowOptions {
   /// the app / steal key focus when shown. Combined with `frameless`, this
   /// is the configuration used for tray / menu-bar popovers.
   pub no_activate: bool,
+  /// Keep the standard frame and traffic-light buttons, but make the title
+  /// bar transparent and let the web content extend under it (Electron
+  /// `titleBarStyle: 'hidden'`). macOS only; ignored elsewhere.
+  pub transparent_titlebar: bool,
 }
 
 impl WindowOptions {
@@ -510,6 +515,9 @@ impl WindowOptions {
     }
     if self.no_activate {
       flags |= WEF_WINDOW_FLAG_NO_ACTIVATE;
+    }
+    if self.transparent_titlebar {
+      flags |= WEF_WINDOW_FLAG_TRANSPARENT_TITLEBAR;
     }
     flags
   }

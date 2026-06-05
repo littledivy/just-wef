@@ -51,6 +51,7 @@ class WefHandler : public CefClient,
                    public CefLifeSpanHandler,
                    public CefDisplayHandler,
                    public CefKeyboardHandler,
+                   public CefDragHandler,
                    public CefJSDialogHandler {
  public:
   WefHandler();
@@ -70,6 +71,15 @@ class WefHandler : public CefClient,
   CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() override {
     return this;
   }
+  CefRefPtr<CefDragHandler> GetDragHandler() override {
+    return this;
+  }
+
+  // Forward the page's `-webkit-app-region: drag` rectangles to the window so
+  // those areas drag the OS window (used by the transparent-titlebar layout).
+  void OnDraggableRegionsChanged(
+      CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+      const std::vector<CefDraggableRegion>& regions) override;
 
   void OnAfterCreated(CefRefPtr<CefBrowser> browser) override;
   bool DoClose(CefRefPtr<CefBrowser> browser) override;
@@ -122,8 +132,22 @@ class WefApp : public CefApp, public CefBrowserProcessHandler {
 
   void OnContextInitialized() override;
 
+#if defined(__APPLE__)
+  // Drive CefDoMessageLoopWork from the main run loop (external_message_pump)
+  // so the libdispatch main queue keeps draining — tray/status-item creation
+  // and other dispatch_async(main_queue) work would otherwise never run under
+  // CEF's own message loop.
+  void OnScheduleMessagePumpWork(int64_t delay_ms) override;
+#endif
+
  private:
   IMPLEMENT_REFCOUNTING(WefApp);
 };
+
+#if defined(__APPLE__)
+// Stop the [NSApp run] main loop (replaces CefQuitMessageLoop on macOS).
+// Implemented in main_mac.mm.
+void WefQuitMainLoopMac();
+#endif
 
 #endif

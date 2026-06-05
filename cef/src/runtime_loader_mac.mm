@@ -72,6 +72,22 @@ void ConfigureNSWindowAsPanelForCefHandle(void* cef_handle) {
   }
 }
 
+void ConfigureNSWindowTransparentTitlebarForCefHandle(void* cef_handle) {
+  NSView* view = (__bridge NSView*)cef_handle;
+  NSWindow* nswindow = [view window];
+  if (!nswindow)
+    return;
+  // Hidden/inset title bar: the content view extends the full height of the
+  // window (under the title bar), the title bar itself is transparent and its
+  // text hidden, so the web page draws into that strip with the standard
+  // traffic-light buttons floating on top. Matches Electron's
+  // `titleBarStyle: 'hidden'`. The window stays draggable by its title-bar
+  // region; the app insets its own toolbar to clear the traffic lights.
+  nswindow.styleMask |= NSWindowStyleMaskFullSizeContentView;
+  nswindow.titlebarAppearsTransparent = YES;
+  nswindow.titleVisibility = NSWindowTitleHidden;
+}
+
 void RegisterNSWindowForCefHandle(void* cef_handle, uint32_t window_id) {
   NSView* view = (__bridge NSView*)cef_handle;
   NSWindow* nswindow = [view window];

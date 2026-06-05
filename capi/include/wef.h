@@ -29,8 +29,16 @@ extern "C" {
 // for tray / menu-bar popovers. On macOS NO_ACTIVATE maps to a
 // non-activating NSPanel; on Windows to WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
 // on Linux to a utility window type hint.
+//
+// TRANSPARENT_TITLEBAR keeps the standard window frame and traffic-light /
+// caption buttons but makes the title bar transparent and lets the web
+// content extend underneath it (Electron `titleBarStyle: 'hidden'`). The page
+// can then draw its own toolbar in that strip, with the system buttons
+// overlaid. The app is responsible for insetting its UI to clear the
+// traffic-light buttons. macOS only for now; ignored by other backends.
 #define WEF_WINDOW_FLAG_FRAMELESS (1u << 0)
 #define WEF_WINDOW_FLAG_NO_ACTIVATE (1u << 1)
+#define WEF_WINDOW_FLAG_TRANSPARENT_TITLEBAR (1u << 2)
 
 typedef struct wef_backend_api wef_backend_api_t;
 

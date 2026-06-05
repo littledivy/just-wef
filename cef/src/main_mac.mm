@@ -79,6 +79,69 @@
 }
 @end
 
+// ── External message pump ────────────────────────────────────────────────
+// CEF's own CefRunMessageLoop() does not service libdispatch's main queue, so
+// dispatch_async(dispatch_get_main_queue(), …) work — NSStatusItem (tray)
+// creation, notifications, etc. — never runs. Instead we enable
+// settings.external_message_pump and pump CefDoMessageLoopWork() from the main
+// NSRunLoop driven by [NSApp run], which DOES drain the main queue.
+@interface WefPumpTarget : NSObject
+- (void)start;
+- (void)tick;
+@end
+
+@implementation WefPumpTarget {
+  NSTimer* _timer;
+  BOOL _working;
+}
+- (void)tick {
+  if (_working) return;  // CefDoMessageLoopWork is not reentrant
+  _working = YES;
+  CefDoMessageLoopWork();
+  _working = NO;
+}
+- (void)start {
+  // Steady pump: external_message_pump's OnScheduleMessagePumpWork alone
+  // doesn't reliably re-fire for cross-thread CefPostTasks, so drive CEF on a
+  // fixed cadence. Common modes so it keeps ticking while a menu/tray popup is
+  // tracking the run loop.
+  _timer = [NSTimer timerWithTimeInterval:(1.0 / 60.0)
+                                   target:self
+                                 selector:@selector(tick)
+                                 userInfo:nil
+                                  repeats:YES];
+  [[NSRunLoop mainRunLoop] addTimer:_timer forMode:NSRunLoopCommonModes];
+}
+@end
+
+static WefPumpTarget* g_pump = nil;
+
+void WefApp::OnScheduleMessagePumpWork(int64_t delay_ms) {
+  // Nudge an immediate pump for snappier response; the steady timer guarantees
+  // progress regardless.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (g_pump) [g_pump tick];
+  });
+}
+
+void WefQuitMainLoopMac() {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [NSApp stop:nil];
+    // [NSApp run] only returns after it dequeues one more event; nudge it.
+    NSEvent* event =
+        [NSEvent otherEventWithType:NSEventTypeApplicationDefined
+                           location:NSZeroPoint
+                      modifierFlags:0
+                          timestamp:0
+                       windowNumber:0
+                            context:nil
+                            subtype:0
+                              data1:0
+                              data2:0];
+    [NSApp postEvent:event atStart:YES];
+  });
+}
+
 // Cmd+C/V/X/A on macOS dispatch through the main menu's performKeyEquivalent:
 // — Cocoa matches the keystroke against menu items, then sends their action
 // (cut:/copy:/paste:/selectAll:) up the responder chain to Chromium's content
@@ -261,6 +324,9 @@ int main(int argc, char* argv[]) {
 
     CefSettings settings;
     settings.no_sandbox = true;
+    // Run [NSApp run] as the message loop (see WefPumpTarget) so the main
+    // libdispatch queue is serviced — required for tray/status items.
+    settings.external_message_pump = true;
 
     std::string cache_path = std::string(NSTemporaryDirectory().UTF8String) +
                              "wef_cef_" + std::to_string(getpid());
@@ -275,6 +341,10 @@ int main(int argc, char* argv[]) {
 
     CefRefPtr<WefApp> app(new WefApp);
 
+    // Must exist before CefInitialize so the first OnScheduleMessagePumpWork
+    // (which kicks OnContextInitialized → runtime start) isn't dropped.
+    g_pump = [[WefPumpTarget alloc] init];
+
     if (!CefInitialize(main_args, settings, app.get(), nullptr)) {
       return CefGetExitCode();
     }
@@ -288,7 +358,10 @@ int main(int argc, char* argv[]) {
 
     [NSApp activateIgnoringOtherApps:YES];
 
-    CefRunMessageLoop();
+    // Drive CEF from the main NSRunLoop (external_message_pump). Unlike
+    // CefRunMessageLoop(), [NSApp run] also drains the libdispatch main queue.
+    [g_pump start];  // begin the steady pump so the runtime starts
+    [NSApp run];
 
     RuntimeLoader::GetInstance()->Shutdown();
 

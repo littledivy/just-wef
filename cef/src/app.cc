@@ -43,11 +43,16 @@ void WefWindowDelegate::OnWindowCreated(CefRefPtr<CefWindow> window) {
   // (WEF_WINDOW_FLAG_NO_ACTIVATE) are reconfigured before the first Show()
   // so they float without stealing focus from the foreground app.
   bool no_activate = (flags_ & WEF_WINDOW_FLAG_NO_ACTIVATE) != 0;
+  bool transparent_titlebar =
+      (flags_ & WEF_WINDOW_FLAG_TRANSPARENT_TITLEBAR) != 0;
   CefWindowHandle handle = window->GetWindowHandle();
   if (handle && wef_id_ > 0) {
 #if defined(__APPLE__)
     if (no_activate) {
       ConfigureNSWindowAsPanelForCefHandle(handle);
+    }
+    if (transparent_titlebar) {
+      ConfigureNSWindowTransparentTitlebarForCefHandle(handle);
     }
     RegisterNSWindowForCefHandle(handle, wef_id_);
 #elif defined(_WIN32)
@@ -153,7 +158,12 @@ void WefHandler::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
     }
   }
   if (browser_list_.empty()) {
+#if defined(__APPLE__)
+    // macOS runs [NSApp run] (external_message_pump); stop that instead.
+    WefQuitMainLoopMac();
+#else
     CefQuitMessageLoop();
+#endif
   }
 }
 
@@ -163,6 +173,20 @@ void WefHandler::OnTitleChange(CefRefPtr<CefBrowser> browser,
   if (auto browser_view = CefBrowserView::GetForBrowser(browser)) {
     if (auto window = browser_view->GetWindow()) {
       window->SetTitle(title);
+    }
+  }
+}
+
+void WefHandler::OnDraggableRegionsChanged(
+    CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+    const std::vector<CefDraggableRegion>& regions) {
+  CEF_REQUIRE_UI_THREAD();
+  // Apply the page's `-webkit-app-region` rectangles to the window so those
+  // areas drag the OS window (the rest stays interactive). Lets a web toolbar
+  // in the transparent title bar behave like a native one.
+  if (auto browser_view = CefBrowserView::GetForBrowser(browser)) {
+    if (auto window = browser_view->GetWindow()) {
+      window->SetDraggableRegions(regions);
     }
   }
 }
