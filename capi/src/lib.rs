@@ -134,6 +134,7 @@ pub fn should_shutdown() -> bool {
   SHUTDOWN_FLAG.load(Ordering::SeqCst)
 }
 
+#[derive(Clone)]
 pub enum Value {
   Null,
   Bool(bool),
