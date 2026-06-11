@@ -6,19 +6,19 @@ It defines the boundary between a **backend** (a native executable embedding a
 browser engine) and a **runtime** (a shared library holding the application
 logic). The backend implements the ABI; the runtime consumes it.
 
-`LAUFEY_API_VERSION` (currently `25`) versions the contract. The `version` field on
-the API table lets a runtime detect the backend's vintage and avoid calling
+`LAUFEY_API_VERSION` (currently `25`) versions the contract. The `version` field
+on the API table lets a runtime detect the backend's vintage and avoid calling
 function pointers a backend predates (older backends leave new pointers `NULL`).
 
 ## Runtime entry points
 
 A runtime is a `.dylib`/`.so`/`.dll` that exports three symbols:
 
-| Symbol (`*_SYMBOL` macro) | Signature                           | Role                                                                           |
-| ------------------------- | ----------------------------------- | ------------------------------------------------------------------------------ |
-| `laufey_runtime_init`        | `int(const laufey_backend_api_t* api)` | Backend hands the runtime the API table. Stash it; return 0 on success.        |
-| `laufey_runtime_start`       | `int(void)`                         | Run application setup (create windows, register handlers). Returns when ready. |
-| `laufey_runtime_shutdown`    | `void(void)`                        | Tear down before the process exits.                                            |
+| Symbol (`*_SYMBOL` macro) | Signature                              | Role                                                                           |
+| ------------------------- | -------------------------------------- | ------------------------------------------------------------------------------ |
+| `laufey_runtime_init`     | `int(const laufey_backend_api_t* api)` | Backend hands the runtime the API table. Stash it; return 0 on success.        |
+| `laufey_runtime_start`    | `int(void)`                            | Run application setup (create windows, register handlers). Returns when ready. |
+| `laufey_runtime_shutdown` | `void(void)`                           | Tear down before the process exits.                                            |
 
 The backend `dlopen`s the runtime, resolves these symbols, calls `init` then
 `start`, and drives the OS event loop. Control flows backend → runtime through
@@ -43,8 +43,8 @@ hand-rolled vtable with no global state. Windows are referenced by an opaque
 The pointers group into:
 
 - **Window lifecycle** — `create_window`, `create_window_ex` (style flags, see
-  `LAUFEY_WINDOW_FLAG_*`), `close_window`, `navigate`, `set_title`, size/position
-  get+set, `set_resizable`/`is_resizable`,
+  `LAUFEY_WINDOW_FLAG_*`), `close_window`, `navigate`, `set_title`,
+  size/position get+set, `set_resizable`/`is_resizable`,
   `set_always_on_top`/`is_always_on_top`, `show`/`hide`/`is_visible`, `focus`,
   `quit`, `post_ui_task`.
 - **Value marshalling** — the `value_*` family (below).
@@ -71,9 +71,10 @@ differences.
 
 ## Values (`laufey_value_t`)
 
-`laufey_value_t` is an opaque, dynamically-typed value used for everything crossing
-the JS ↔ native boundary (call arguments, results, menu templates, notification
-options). It models the JSON types plus binary blobs and JS-callback handles:
+`laufey_value_t` is an opaque, dynamically-typed value used for everything
+crossing the JS ↔ native boundary (call arguments, results, menu templates,
+notification options). It models the JSON types plus binary blobs and
+JS-callback handles:
 
 - **Inspect:** `value_is_null` / `_bool` / `_int` / `_double` / `_string` /
   `_list` / `_dict` / `_binary` / `_callback`.
@@ -100,8 +101,9 @@ and free it with `release_js_callback(id)`.
 
 1. The runtime exposes a namespace in the page (`set_js_namespace`, default
    `"Laufey"`) and registers `set_js_call_handler`.
-2. Page JS calls `Laufey.someMethod(args…)`; the backend invokes the handler with a
-   `call_id`, the method name, and the arguments as a `laufey_value_t` list.
+2. Page JS calls `Laufey.someMethod(args…)`; the backend invokes the handler
+   with a `call_id`, the method name, and the arguments as a `laufey_value_t`
+   list.
 3. The runtime does its work and replies with
    `js_call_respond(call_id, result,
    error)` — resolving or rejecting the
