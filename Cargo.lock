@@ -1861,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "laufey"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bindgen",
  "tokio",
