@@ -182,8 +182,7 @@ static void Backend_JsCallRespond(void* data, uint64_t call_id,
   // macOS/Windows decides resolve-vs-reject by the pointer's truthiness, so
   // fabricating a Value::Null() here would make every response look like a
   // rejection and resolve the JS promise with null.
-  laufey::ValuePtr errorPtr =
-      (error && error->value) ? error->value : nullptr;
+  laufey::ValuePtr errorPtr = (error && error->value) ? error->value : nullptr;
   loader->JsCallRespond(window_id, call_id, resultPtr, errorPtr);
 }
 
