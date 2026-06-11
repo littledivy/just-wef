@@ -1,8 +1,8 @@
 # Dock / taskbar
 
-laufey can badge the application icon, request the user's attention, and — on macOS
-— drive the dock menu, the icon's visibility, and a reopen callback. These are
-free functions rather than window methods, because the dock is
+laufey can badge the application icon, request the user's attention, and — on
+macOS — drive the dock menu, the icon's visibility, and a reopen callback. These
+are free functions rather than window methods, because the dock is
 application-scoped on macOS, while on Windows and Linux the equivalent
 operations act on the currently focused window's taskbar button.
 

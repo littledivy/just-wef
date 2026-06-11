@@ -44,8 +44,8 @@ laufey::main!(main);
 ### Docs
 
 - [architecture.md](docs/architecture.md) — backend/runtime split
-- [c-abi.md](docs/c-abi.md) — the `laufey.h` C ABI: runtime entry points, the API
-  table, the value model, and the JS call flow
+- [c-abi.md](docs/c-abi.md) — the `laufey.h` C ABI: runtime entry points, the
+  API table, the value model, and the JS call flow
 - [backends.md](docs/backends.md) — CEF, WebView, and Winit
 - [features/](docs/features/) — one page per feature, with a usage example and
   the per-platform support matrix

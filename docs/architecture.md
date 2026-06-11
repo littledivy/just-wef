@@ -36,11 +36,11 @@ function pointers from `laufey_backend_api_t` into safe Rust types (`Window`,
 
 ### The C ABI contract (`laufey_backend_api_t`)
 
-The central interface is a struct of function pointers (`capi/include/laufey.h`).
-The backend fills this struct and passes a pointer to `laufey_runtime_init()`. The
-runtime stores it for the process lifetime. Every capability (navigation, JS
-execution, event handlers, window management) is a nullable function pointer in
-this struct.
+The central interface is a struct of function pointers
+(`capi/include/laufey.h`). The backend fills this struct and passes a pointer to
+`laufey_runtime_init()`. The runtime stores it for the process lifetime. Every
+capability (navigation, JS execution, event handlers, window management) is a
+nullable function pointer in this struct.
 
 **Adding a new API**: add the field to `laufey_backend_api_t` in
 `capi/include/laufey.h`, then implement it in every backend. Both C++ backends
@@ -51,7 +51,8 @@ CMake variable — there is no second copy to sync.
 
 All event handlers follow the same pattern:
 
-1. Define a C callback type (`laufey_keyboard_event_fn`, `laufey_mouse_click_fn`)
+1. Define a C callback type (`laufey_keyboard_event_fn`,
+   `laufey_mouse_click_fn`)
 2. Add a `set_*_handler(backend_data, callback, user_data)` function pointer to
    the API struct
 3. Backend stores the callback+user_data behind a mutex
@@ -71,9 +72,10 @@ duplicate. Each backend `add_subdirectory`s it and links `laufey_backend_common`
 from its platform branch.
 
 The bridge is intentionally minimal — common code never touches the
-backend-specific `laufey_value_t` types. Each backend pre-parses `laufey_value_t` into
-plain C++ structs (`laufey_common::NotificationOptions`, etc.) before calling into
-common functions. Header: `backend-common/include/laufey_backend_common.h`.
+backend-specific `laufey_value_t` types. Each backend pre-parses
+`laufey_value_t` into plain C++ structs (`laufey_common::NotificationOptions`,
+etc.) before calling into common functions. Header:
+`backend-common/include/laufey_backend_common.h`.
 
 Currently shared:
 
@@ -86,7 +88,7 @@ Currently shared:
 | **Key mapping**                    | `keymap_mac.mm` (NSEvent → W3C)                                                                                  | `keymap_vk.cc` (VK → W3C; CEF uses on every platform)          | `keymap_gdk.cc` (GDK → W3C)                                                |
 | **App / context menu**             | `menu_mac.mm` (NSMenu)                                                                                           | `capi/include/win32_menu.h` (HMENU + SetMenu / TrackPopupMenu) | `menu_linux.cc` (GtkMenu / GtkMenuBar)                                     |
 | **Tray icons**                     | `tray_mac.mm` (NSStatusItem)                                                                                     | `tray_win.cc` (Shell_NotifyIcon + WIC + HMENU)                 | `tray_linux.cc` (libappindicator + g_idle_add)                             |
-| **Option parsing**                 | `parse_options.cc` (compiled on every platform; bridges `laufey_value_t` → plain structs)                           |                                                                |                                                                            |
+| **Option parsing**                 | `parse_options.cc` (compiled on every platform; bridges `laufey_value_t` → plain structs)                        |                                                                |                                                                            |
 | **Title-prefix badge bookkeeping** | `title_badge.cc` (`ApplyTitlePrefixBadge` — used by CEF Win+Linux and webview Win+Linux for Dock-badge fallback) |                                                                |                                                                            |
 
 Notes:
@@ -206,8 +208,8 @@ Platform-specific mappings:
 
 ### Value marshalling
 
-The laufey API has a rich value type (`laufey_value_t`) for JS interop. Backends own
-the value representation:
+The laufey API has a rich value type (`laufey_value_t`) for JS interop. Backends
+own the value representation:
 
 - **CEF**: wraps `CefValue` / `CefListValue` directly
 - **Webview**: uses a custom `Value` class with JSON serialization for JS

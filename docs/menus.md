@@ -1,11 +1,11 @@
 # Menus
 
-laufey supports three kinds of menus: an application menu bar, per-window context
-menus, and the developer tools. A menu is described by a slice of `MenuItem`
-values, which can be regular items, submenus, separators, or standard roles such
-as quit, copy, and paste. Items may carry a keyboard accelerator. When the user
-clicks an item that has an identifier, your callback is invoked with that
-identifier.
+laufey supports three kinds of menus: an application menu bar, per-window
+context menus, and the developer tools. A menu is described by a slice of
+`MenuItem` values, which can be regular items, submenus, separators, or standard
+roles such as quit, copy, and paste. Items may carry a keyboard accelerator.
+When the user clicks an item that has an identifier, your callback is invoked
+with that identifier.
 
 ```rust
 use laufey::MenuItem;

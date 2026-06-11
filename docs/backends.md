@@ -1,14 +1,14 @@
 # Backends
 
 A backend is the native executable that hosts a browser (or windowing) engine
-and implements the [C ABI](c-abi.md). laufey ships three; a fourth is on a branch.
-All implement the same `laufey_backend_api_t`, so a runtime is portable across them
-— the differences are in engine, process model, size, and a few features that a
-given engine can't express on a given OS (see
+and implements the [C ABI](c-abi.md). laufey ships three; a fourth is on a
+branch. All implement the same `laufey_backend_api_t`, so a runtime is portable
+across them — the differences are in engine, process model, size, and a few
+features that a given engine can't express on a given OS (see
 [the feature pages](window-management.md)).
 
-| Backend                                                             | Engine        | Process model | Bundled | JS bridge |
-| ------------------------------------------------------------------- | ------------- | ------------- | ------- | --------- |
+| Backend                                                           | Engine        | Process model | Bundled | JS bridge |
+| ----------------------------------------------------------------- | ------------- | ------------- | ------- | --------- |
 | [CEF](https://github.com/littledivy/laufey/tree/main/cef)         | Chromium 144  | multi-process | yes     | yes       |
 | [WebView](https://github.com/littledivy/laufey/tree/main/webview) | system native | single        | no      | yes       |
 | [Winit](https://github.com/littledivy/laufey/tree/main/winit)     | none          | single        | n/a     | no        |
@@ -58,8 +58,8 @@ handles needed to create a rendering surface. Sources in
 ## Servo (experimental)
 
 A [Servo](https://servo.org)-based backend is preserved on the
-[`servo`](https://github.com/littledivy/laufey/tree/servo) branch for future work
-and is not part of the mainline build.
+[`servo`](https://github.com/littledivy/laufey/tree/servo) branch for future
+work and is not part of the mainline build.
 
 ## backend-common
 
